@@ -1,0 +1,29 @@
+# Dependencies & build output
+node_modules/
+dist/
+frontend/dist/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets & local environment
+.env
+.env.local
+.env.*
+*.env.local
+
+# Runtime data (SQLite DB, parsed storage, local JWT secret)
+backend/health.db
+backend/health.db-*
+backend/.jwt_secret
+backend/storage/
+
+# Platform state
+.vly-run/
+
+# Misc
+.DS_Store
+*.log
