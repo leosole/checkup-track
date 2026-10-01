@@ -16,6 +16,24 @@ TOKEN_SCRIPT = os.path.join(ROOT, "scripts", "git-askpass.sh")
 os.chmod(TOKEN_SCRIPT, 0o755)
 
 
+def get_token() -> str:
+    """Token from env if present, else read in-process from .env.local."""
+    tok = os.environ.get("GITHUB_TOKEN")
+    if not tok:
+        path = os.path.join(ROOT, ".env.local")
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.strip().startswith("GITHUB_TOKEN="):
+                        tok = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        break
+        except OSError:
+            pass
+    if not tok:
+        sys.exit("ERROR: token not available (env or .env.local)")
+    return tok
+
+
 def run(args):
     r = subprocess.run(args, cwd=ROOT, capture_output=True, text=True)
     print("$", " ".join(args))
@@ -46,6 +64,7 @@ run(["git", "log", "--oneline", "-3"])
 env = dict(os.environ)
 env["GIT_ASKPASS"] = TOKEN_SCRIPT
 env["GIT_TERMINAL_PROMPT"] = "0"
+env["GH_TOKEN_VAL"] = get_token()
 
 failed = False
 for branch in ["master", "feat/health-dashboard"]:
