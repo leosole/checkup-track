@@ -12,6 +12,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOKEN_SCRIPT = os.path.join(ROOT, "scripts", "git-askpass.sh")
 
+# Freebuff file writes drop the executable bit; restore it for git.
+os.chmod(TOKEN_SCRIPT, 0o755)
+
 
 def run(args):
     r = subprocess.run(args, cwd=ROOT, capture_output=True, text=True)
