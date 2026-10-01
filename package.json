@@ -1,0 +1,12 @@
+{
+  "name": "vitals-health-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Monorepo health dashboard: FastAPI backend + React frontend",
+  "scripts": {
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "typecheck:frontend": "npm --prefix frontend run typecheck",
+    "dev:backend": "cd backend && python3 -m uvicorn main:app --host 0.0.0.0 --port 8000"
+  }
+}
