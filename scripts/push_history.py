@@ -68,7 +68,7 @@ env["GH_TOKEN_VAL"] = get_token()
 
 failed = False
 for branch in ["master", "feat/health-dashboard"]:
-    r = subprocess.run(["git", "push", "-u", "origin", branch],
+    r = subprocess.run(["git", "push", "--force", "-u", "origin", branch],
                        cwd=ROOT, capture_output=True, text=True, env=env)
     print(f"$ git push -u origin {branch} -> rc={r.returncode}")
     out = (r.stdout + r.stderr).strip()

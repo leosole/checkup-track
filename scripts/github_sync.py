@@ -313,7 +313,24 @@ def cmd_merge():
     print("verified state:", pr.get("state"), "merged:", pr.get("merged"))
 
 
+def cmd_finalize():
+    """After force-push: make master the default branch and drop the bootstrap branch."""
+    status, repo = req("GET", f"/repos/{REPO}")
+    default = repo.get("default_branch")
+    print("current default:", default)
+    if default != "master":
+        status, _ = req("PATCH", f"/repos/{REPO}", {"default_branch": "master"})
+        print("default branch -> master:", status)
+        if default:
+            status, _ = req("DELETE", f"/repos/{REPO}/git/refs/heads/{default}")
+            print(f"removed bootstrap branch {default}:", status)
+    status, refs = req("GET", f"/repos/{REPO}/git/refs/heads")
+    if status == 200:
+        print("branches:", ", ".join(r["ref"].split("/")[-1] for r in refs))
+    cmd_whoami()
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "whoami"
     {"whoami": cmd_whoami, "push": cmd_push, "pr": cmd_pr,
-     "checks": cmd_checks, "merge": cmd_merge}[cmd]()
+     "checks": cmd_checks, "merge": cmd_merge, "finalize": cmd_finalize}[cmd]()
