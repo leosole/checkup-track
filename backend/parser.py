@@ -1,8 +1,8 @@
 """PDF ingestion pipeline: MarkItDown conversion + Groq structured extraction.
 
 Flow:
-1. Save the raw PDF into ``storage/pdfs/``.
-2. Run MarkItDown on the saved file and write the markdown to ``storage/markdowns/``.
+1. Save the raw PDF (Backblaze B2 when configured, else ``storage/pdfs/``).
+2. Run MarkItDown on the PDF bytes and write the markdown to ``storage/markdowns/``.
 3. Feed the markdown to Groq (JSON mode) with a strict Pydantic schema and
    validate the response into ``LLMExamsExtractionSchema``.
 4. Insert the structured rows (Exam + ExamBiomarker) into SQLite.
@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 import uuid
 from datetime import date, datetime
 from pathlib import Path
@@ -21,6 +22,7 @@ from groq import Groq
 from markitdown import MarkItDown
 from sqlmodel import Session, select
 
+import object_storage
 from database import MARKDOWN_DIR, PDF_DIR, engine
 from models import (
     BiomarkerResponse,
@@ -70,40 +72,74 @@ def _system_prompt() -> str:
     return SYSTEM_PROMPT.format(schema=schema)
 
 
-def _save_raw_pdf(pdf_bytes: bytes, original_name: str) -> Path:
-    """Step 1: save the incoming PDF into storage/pdfs/ with a safe unique name."""
+def _save_raw_pdf(pdf_bytes: bytes, original_name: str) -> str:
+    """Step 1: persist the PDF (B2 when configured, else storage/pdfs/).
+
+    Returns the storage reference: "exams/<name>.pdf" for remote objects or
+    "storage/pdfs/<name>.pdf" for the local fallback.
+    """
     stem = Path(original_name or "exam").stem
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._") or "exam"
     stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    pdf_path = PDF_DIR / f"{stem}_{stamp}_{uuid.uuid4().hex[:8]}.pdf"
-    pdf_path.write_bytes(pdf_bytes)
-    return pdf_path
+    unique = f"{stem}_{stamp}_{uuid.uuid4().hex[:8]}.pdf"
+    if object_storage.is_remote_enabled():
+        key = f"exams/{unique}"
+        object_storage.upload_pdf(pdf_bytes, key)
+        return key
+    PDF_DIR.mkdir(parents=True, exist_ok=True)
+    (PDF_DIR / unique).write_bytes(pdf_bytes)
+    return f"storage/pdfs/{unique}"
 
 
-def _convert_to_markdown(pdf_path: Path) -> Path:
-    """Step 2: run MarkItDown on the saved PDF and write the .md counterpart."""
-    md = MarkItDown(enable_plugins=False)
-    result = md.convert(str(pdf_path))
-    text = result.text_content if result is not None else ""
+def _load_pdf_bytes(ref: str) -> bytes:
+    """Read a stored PDF back (remote object or local fallback file)."""
+    if ref.startswith("exams/"):
+        return object_storage.download_pdf(ref)
+    return object_storage.local_pdf_path(ref).read_bytes()
+
+
+def _discard_pdf(ref: str) -> None:
+    """Best-effort removal when a later pipeline step fails."""
+    try:
+        if ref.startswith("exams/"):
+            object_storage.delete_pdf(ref)
+        else:
+            object_storage.local_pdf_path(ref).unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001 - cleanup must never mask the real error
+        logger.warning("could not discard %s", ref)
+
+
+def _convert_to_markdown(pdf_bytes: bytes, ref: str) -> Path:
+    """Step 2: run MarkItDown on the PDF bytes and write the .md counterpart."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(pdf_bytes)
+        tmp_path = Path(tmp.name)
+    try:
+        md = MarkItDown(enable_plugins=False)
+        result = md.convert(str(tmp_path))
+        text = result.text_content if result is not None else ""
+    finally:
+        tmp_path.unlink(missing_ok=True)
     if not text or not text.strip():
         raise ValueError(
             "MarkItDown produced no text from the PDF. "
             "Only text-selectable (non-scanned) PDFs are supported."
         )
-    md_path = MARKDOWN_DIR / (pdf_path.stem + ".md")
+    MARKDOWN_DIR.mkdir(parents=True, exist_ok=True)
+    md_path = MARKDOWN_DIR / (Path(ref).stem + ".md")
     md_path.write_text(text, encoding="utf-8")
     return md_path
 
 
-def _fallback_date(markdown: str, pdf_path: Path) -> date:
-    """Best-effort exam date: first ISO date in the markdown, else file mtime."""
+def _fallback_date(markdown: str) -> date:
+    """Best-effort exam date: first ISO date in the markdown, else today."""
     match = ISO_DATE_RE.search(markdown[:4000])
     if match:
         try:
             return date.fromisoformat(match.group(1))
         except ValueError:
             pass
-    return datetime.fromtimestamp(pdf_path.stat().st_mtime).date()
+    return datetime.utcnow().date()
 
 
 def _call_groq(client: Groq, model: str, markdown: str) -> LLMExamsExtractionSchema:
@@ -180,14 +216,13 @@ def process_exam(
         raise ValueError("The uploaded file is not a valid PDF.")
 
     # Step 1: persist the raw PDF.
-    pdf_path = _save_raw_pdf(pdf_bytes, filename)
-    pdf_rel = f"storage/pdfs/{pdf_path.name}"
+    pdf_ref = _save_raw_pdf(pdf_bytes, filename)
 
     # Step 2: convert to markdown and persist it.
     try:
-        md_path = _convert_to_markdown(pdf_path)
+        md_path = _convert_to_markdown(pdf_bytes, pdf_ref)
     except Exception:
-        pdf_path.unlink(missing_ok=True)
+        _discard_pdf(pdf_ref)
         raise
     md_rel = f"storage/markdowns/{md_path.name}"
     markdown = md_path.read_text(encoding="utf-8")
@@ -197,10 +232,10 @@ def process_exam(
 
     if extraction is None:
         title = Path(filename).stem or "Untitled exam"
-        performed = _fallback_date(markdown, pdf_path)
+        performed = _fallback_date(markdown)
     else:
         title = (extraction.title or "").strip() or (Path(filename).stem or "Untitled exam")
-        performed = extraction.date_performed or _fallback_date(markdown, pdf_path)
+        performed = extraction.date_performed or _fallback_date(markdown)
 
     # Step 4: insert rows scoped to the user.
     with Session(engine) as session:
@@ -208,7 +243,7 @@ def process_exam(
             user_id=user_id,
             title=title,
             date_performed=performed,
-            pdf_path=pdf_rel,
+            pdf_path=pdf_ref,
             markdown_path=md_rel,
         )
         session.add(exam)
