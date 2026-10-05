@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Commit platform sync scripts locally and push branches to the remote.
+"""Commit staged/unstaged project changes and push specific branches.
 
-Runs git through subprocess (which reaches the network fine in this sandbox)
-and authenticates the https remote with GIT_ASKPASS + GITHUB_TOKEN.
+Usage: python3 scripts/push_history.py "Commit message" [branch ...]
+
+Never force-pushes; a non-fast-forward rejection aborts with an error.
+Authenticates https remotes with GIT_ASKPASS + GITHUB_TOKEN (env or .env.local).
 Token values are never printed.
 """
 import os
@@ -13,11 +15,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOKEN_SCRIPT = os.path.join(ROOT, "scripts", "git-askpass.sh")
 
 # Freebuff file writes drop the executable bit; restore it for git.
-os.chmod(TOKEN_SCRIPT, 0o755)
+if os.path.exists(TOKEN_SCRIPT):
+    os.chmod(TOKEN_SCRIPT, 0o755)
 
 
 def get_token() -> str:
-    """Token from env if present, else read in-process from .env.local."""
     tok = os.environ.get("GITHUB_TOKEN")
     if not tok:
         path = os.path.join(ROOT, ".env.local")
@@ -45,19 +47,20 @@ def run(args):
     return r.stdout
 
 
-run(["git", "add", "scripts/github_sync.py", "scripts/git-askpass.sh", "scripts/push_history.py"])
+if len(sys.argv) < 2:
+    sys.exit("usage: push_history.py 'message' [branch ...]")
+message = sys.argv[1]
+branches = sys.argv[2:] or [
+    subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=ROOT,
+                   capture_output=True, text=True).stdout.strip()
+]
 
+run(["git", "add", "-A"])
 staged = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=ROOT).returncode != 0
 if staged:
-    msg = (
-        "Add platform sync scripts for remote push, PR creation and merge via REST API\n"
-        "\n"
-        "🤖 Generated with Codebuff\n"
-        "Co-Authored-By: Codebuff <noreply@codebuff.com>"
-    )
-    run(["git", "commit", "-m", msg])
+    run(["git", "commit", "-m", message])
 else:
-    print("nothing new to commit")
+    print("nothing to commit")
 
 run(["git", "log", "--oneline", "-3"])
 
@@ -67,8 +70,8 @@ env["GIT_TERMINAL_PROMPT"] = "0"
 env["GH_TOKEN_VAL"] = get_token()
 
 failed = False
-for branch in ["master", "feat/health-dashboard"]:
-    r = subprocess.run(["git", "push", "--force", "-u", "origin", branch],
+for branch in branches:
+    r = subprocess.run(["git", "push", "-u", "origin", branch],
                        cwd=ROOT, capture_output=True, text=True, env=env)
     print(f"$ git push -u origin {branch} -> rc={r.returncode}")
     out = (r.stdout + r.stderr).strip()

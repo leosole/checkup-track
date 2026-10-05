@@ -185,7 +185,7 @@ def cmd_whoami():
               f"pushed_at={repo.get('pushed_at')}")
         status, refs = req("GET", f"/repos/{REPO}/git/refs/heads")
         if status == 200 and refs:
-            print("branches:", ", ".join(r["ref"].split("/")[-1] for r in refs))
+            print("branches:", ", ".join(r["ref"].removeprefix("refs/heads/") for r in refs))
         else:
             print("branches: none (empty repo)")
     elif status == 404:
@@ -240,7 +240,7 @@ def cmd_push():
 
 def cmd_pr():
     status, refs = req("GET", f"/repos/{REPO}/git/refs/heads")
-    heads = {r["ref"].split("/")[-1]: r["object"]["sha"] for r in refs}
+    heads = {r["ref"].removeprefix("refs/heads/"): r["object"]["sha"] for r in refs}
     if BRANCH not in heads:
         sys.exit(f"ERROR: {BRANCH} not on remote")
     base = "master" if "master" in heads else next(iter(heads))
@@ -248,19 +248,18 @@ def cmd_pr():
     if status == 200 and pulls:
         print("PR already open:", pulls[0]["html_url"], "#", pulls[0]["number"])
         return
-    title = "Add health dashboard monorepo"
+    title = "Add Backblaze B2 storage for lab-report PDFs"
     body = (
         "## Summary\n"
-        "- Full health-dashboard monorepo: FastAPI + SQLModel backend and React 18 + TypeScript + Vite frontend\n"
-        "- Auth: stateless JWT (PyJWT HS256) plus Google ID-token verification\n"
-        "- PDF biomarker extraction pipeline: upload -> MarkItDown -> Groq LLM (JSON mode) -> structured SQLModel rows\n"
-        "- Exams/medications CRUD, calendar, analytics time-series, full-text search\n"
-        "- CI: frontend (typecheck + build) and backend (import + schema check) GitHub Actions workflows\n"
-        "- GitHub integration tooling: scripts/github_sync.py (REST API push/PR/merge without git protocol)\n"
+        "- New object storage layer (backend/object_storage.py): lab-report PDFs upload to a Backblaze B2 bucket via the S3-compatible API when B2_* env vars are set, with endpoint auto-discovery\n"
+        "- Local-disk fallback (backend/storage/pdfs/) preserved exactly for dev when keys are absent — preview behavior unchanged\n"
+        "- parser.py pipeline reworked: PDFs persist through the storage layer, MarkItDown runs from bytes via temp files, failed uploads are cleaned up in both modes\n"
+        "- boto3 added to requirements.txt (installed by CI and production hosting)\n"
+        "- Branch-name parsing fix in the sync tooling (refs/heads/feat/health-dashboard was truncated)\n"
         "\n## Test plan\n"
-        "- Frontend `tsc --noEmit` and `vite build` pass locally\n"
-        "- Backend imports cleanly with tables {user, exam, exambiomarker, medication}\n"
-        "- End-to-end PDF upload verified with Groq extraction (4 biomarkers, correct units/ranges/flags)"
+        "- Backend import + table-schema check pass (user, exam, exambiomarker, medication)\n"
+        "- End-to-end pipeline verified locally with live Groq: CBC report -> title/date + Hemoglobin 13.5 g/dL (normal), Glucose 118 mg/dL (flagged abnormal), no errors\n"
+        "- CI: frontend typecheck/build and backend import/schema workflows" 
     )
     status, pr = req("POST", f"/repos/{REPO}/pulls",
                      {"title": title, "body": body, "head": BRANCH, "base": base})
@@ -326,7 +325,7 @@ def cmd_finalize():
             print(f"removed bootstrap branch {default}:", status)
     status, refs = req("GET", f"/repos/{REPO}/git/refs/heads")
     if status == 200:
-        print("branches:", ", ".join(r["ref"].split("/")[-1] for r in refs))
+        print("branches:", ", ".join(r["ref"].removeprefix("refs/heads/") for r in refs))
     cmd_whoami()
 
 
