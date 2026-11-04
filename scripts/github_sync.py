@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 
 API = "https://api.github.com"
-REPO = "leosole/healthtrack"
+REPO = "leosole/exametry"
 BRANCH = "feat/health-dashboard"
 
 # Integration tooling that lives only as untracked files locally but belongs
@@ -47,7 +47,7 @@ def req(method: str, path: str, body=None, raw: bool = False):
     data = None
     r = urllib.request.Request(API + path, method=method)
     r.add_header("Authorization", "token " + get_token())
-    r.add_header("User-Agent", "freebuff-healthtrack-sync")
+    r.add_header("User-Agent", "freebuff-exametry-sync")
     r.add_header("Accept", "application/vnd.github+json")
     if body is not None:
         data = json.dumps(body).encode("utf-8")
@@ -161,7 +161,7 @@ def push_branch(ref: str, message: str, parents, extra_files=None) -> str:
 
 def bootstrap_contents_api() -> str:
     """Initialize an empty repo with a throwaway commit (Git Data API needs >=1 commit)."""
-    content = base64.b64encode(b"# healthtrack\n\nBootstrap commit; replaced by real history.\n").decode()
+    content = base64.b64encode(b"# exametry\n\nBootstrap commit; replaced by real history.\n").decode()
     status, resp = req("PUT", f"/repos/{REPO}/contents/.freebuff-bootstrap.md",
                        {"message": "Initialize repository", "content": content})
     if status == 201:
@@ -197,7 +197,7 @@ def cmd_whoami():
 def cmd_push():
     status, repo = req("GET", f"/repos/{REPO}")
     if status == 404:
-        status, repo = req("POST", "/user/repos", {"name": "healthtrack", "private": True})
+        status, repo = req("POST", "/user/repos", {"name": "exametry", "private": True})
         if status != 201:
             sys.exit(f"ERROR create repo: {status} {json.dumps(repo)[:200]}")
         print("created repo", repo["full_name"])
