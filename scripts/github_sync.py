@@ -248,19 +248,17 @@ def cmd_pr():
     if status == 200 and pulls:
         print("PR already open:", pulls[0]["html_url"], "#", pulls[0]["number"])
         return
-    title = "Make the backend deployable: api/ adapter and Postgres support"
+    title = "Add AGENTS.md with project instructions for coding agents"
     body = (
         "## Summary\n"
-        "- New `api/index.py` ASGI entrypoint for Freebuff's Python hosting: puts `backend/` on `sys.path` (the backend uses flat imports), re-exports `app`, and runs idempotent `init_db()` at import because serverless hosts do not reliably fire ASGI startup events; a DB failure is logged instead of raised so `/health` still answers\n"
-        "- `backend/database.py` now reads `DATABASE_URL` (Postgres in production) and keeps SQLite at `backend/health.db` as the dev/CI fallback; `postgres://` URLs are normalized, Postgres uses `pool_pre_ping`/`pool_recycle` for hosted idle-connection drops, and storage directories fall back to the temp dir on read-only filesystems\n"
-        "- `api/requirements.txt` is the canonical dependency list (adds `psycopg2-binary`); `backend/requirements.txt` includes it so there is a single source of truth for CI and hosting\n"
-        "- Docs: `DATABASE_URL` documented in `env.example` and README, plus a short production section; stale `backend/.env.example` reference corrected\n"
+        "- New `AGENTS.md` at the repo root describing what exametry is and how to work on it safely: the PDF -> Markdown -> Groq extraction pipeline, the two-process layout (FastAPI on 8000, Vite on 5173), and a one-line purpose per meaningful file\n"
+        "- Documents the conventions that are easy to break: flat backend imports and why `api/index.py` manipulates `sys.path`, the adapter being a shim rather than a second app, schema created with `create_all` and no migrations, keeping SQLite and Postgres paths both working, B2-vs-local storage parity, and server-side Google ID-token verification\n"
+        "- Captures frontend rules: no router (auth-state switch in `app.tsx`), lowercase-hyphen filenames, reuse of `components/ui` primitives and the existing Tailwind tokens, and HMR disabled in `vite.config.ts` on purpose\n"
+        "- Environment table for `GROQ_API_KEY`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `DATABASE_URL`, `B2_*` including how the app degrades when each is missing, and the reminder that GitHub Actions secrets never reach the running app\n"
+        "- API map, a concrete verification recipe (import/schema check, typecheck, endpoint smoke against a throwaway DB, `freebuff-deploy check`), and known constraints (hosting body limits below the app's 25 MB guard, non-deterministic LLM extraction)\n"
         "\n## Test plan\n"
-        "- Backend import + table-schema check pass (user, exam, exambiomarker, medication) on SQLite\n"
-        "- Postgres path: engine reports dialect postgresql/driver psycopg2, legacy `postgres://` normalized, all four tables compile to valid Postgres DDL\n"
-        "- Live run of the adapter: `/health`, `/api/auth/config`, `/api/auth/me`, `/api/exams`, `/api/medications`, `/api/calendar`, analytics all 200; unauthenticated request 401; medication insert + read-back OK; unreachable DB degrades without killing the app\n"
-        "- `freebuff-deploy check`: deployable, no problems; preview restart healthy (200)\n"
-        "- CI: frontend typecheck/build and backend import/schema workflows"
+        "- Every statement checked against the source: `models.py`, `main.py`, `auth.py`, `api-client.ts`, `auth-context.tsx`, `vite.config.ts`, the CI workflow and `scripts/preview.sh`\n"
+        "- Documentation-only change; CI should be unaffected"
     )
     status, pr = req("POST", f"/repos/{REPO}/pulls",
                      {"title": title, "body": body, "head": BRANCH, "base": base})
