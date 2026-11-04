@@ -1,5 +1,13 @@
-"""SQLModel engine initialization and session management."""
+"""SQLModel engine initialization and session management.
 
+Production deployments set ``DATABASE_URL`` to a Postgres instance (Neon,
+Supabase, RDS, ...). When the variable is unset — local development, tests and
+CI — the app falls back to SQLite at ``backend/health.db`` so nothing extra is
+required to run it.
+"""
+
+import os
+import tempfile
 from pathlib import Path
 from typing import Iterator
 
@@ -7,23 +15,71 @@ from sqlmodel import Session, SQLModel, create_engine
 
 BASE_DIR = Path(__file__).resolve().parent
 STORAGE_DIR = BASE_DIR / "storage"
-PDF_DIR = STORAGE_DIR / "pdfs"
-MARKDOWN_DIR = STORAGE_DIR / "markdowns"
 DATABASE_PATH = BASE_DIR / "health.db"
-DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    echo=False,
+DEFAULT_DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+
+
+def _normalize_database_url(url: str) -> str:
+    """Accept the legacy ``postgres://`` spelling some providers hand out."""
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
+
+
+def _writable_dir(path: Path) -> Path:
+    """Return a writable directory, falling back to the temp dir if needed.
+
+    Hosted filesystems may be read-only, and ``storage/`` lives inside the
+    source tree. PDFs only need to exist while text is being extracted, so the
+    system temp dir is an acceptable fallback (B2 is used when configured).
+    """
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".write-probe"
+        probe.touch()
+        probe.unlink()
+        return path
+    except OSError:
+        fallback = Path(tempfile.gettempdir()) / "vitals-storage" / path.name
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
+PDF_DIR = _writable_dir(STORAGE_DIR / "pdfs")
+MARKDOWN_DIR = _writable_dir(STORAGE_DIR / "markdowns")
+
+DATABASE_URL = _normalize_database_url(
+    os.environ.get("DATABASE_URL", "").strip() or DEFAULT_DATABASE_URL
 )
+IS_POSTGRES = DATABASE_URL.startswith(("postgresql://", "postgresql+"))
+
+if IS_POSTGRES:
+    try:
+        engine = create_engine(
+            DATABASE_URL,
+            # Hosted Postgres drops idle connections; verify before use.
+            pool_pre_ping=True,
+            pool_size=5,
+            max_overflow=5,
+            pool_recycle=1800,
+            echo=False,
+        )
+    except ModuleNotFoundError as exc:  # pragma: no cover - missing driver
+        raise RuntimeError(
+            "Postgres requires psycopg2-binary. Install dependencies with "
+            "`pip install -r backend/requirements.txt`."
+        ) from exc
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        echo=False,
+    )
 
 
 def init_db() -> None:
-    """Create local storage folders and create database tables."""
-    PDF_DIR.mkdir(parents=True, exist_ok=True)
-    MARKDOWN_DIR.mkdir(parents=True, exist_ok=True)
-
+    """Create database tables (idempotent, safe on every cold start)."""
     # Import models so they register on the SQLModel metadata before create_all.
     from models import Exam, ExamBiomarker, Medication, User  # noqa: F401
 

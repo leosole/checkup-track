@@ -1,4 +1,4 @@
-# exametry — Health Dashboard Monorepo
+# CheckUpTrack — Health Dashboard Monorepo
 
 Google-signed-in health dashboard that parses lab-report PDFs into structured
 biomarker data (via MarkItDown + Groq) and visualizes exams, medications,
@@ -24,13 +24,22 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ### Environment variables
 
-Copy `backend/.env.example` and set:
+Copy `env.example` and set:
 
 | Key | Purpose |
 | --- | --- |
 | `GROQ_API_KEY` | Groq API key for structured biomarker extraction |
 | `GOOGLE_CLIENT_ID` | Google OAuth 2.0 web client ID for ID-token verification |
 | `JWT_SECRET` | Signing secret for local JWTs (a dev secret is auto-generated when unset) |
+| `DATABASE_URL` | Postgres URL for production; SQLite (`backend/health.db`) is used when unset |
+| `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` | Backblaze B2 bucket for PDFs; local disk is used when unset |
+
+### Production (Freebuff hosting)
+
+FastAPI is served through `api/index.py` (the ASGI entrypoint hosting loads)
+and its dependencies are declared in `api/requirements.txt`;
+`backend/requirements.txt` includes that file. Set `DATABASE_URL` to a hosted
+Postgres database for production, since the deploy filesystem is ephemeral.
 
 ## Frontend (React + Vite)
 

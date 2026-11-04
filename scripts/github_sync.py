@@ -248,18 +248,19 @@ def cmd_pr():
     if status == 200 and pulls:
         print("PR already open:", pulls[0]["html_url"], "#", pulls[0]["number"])
         return
-    title = "Add Backblaze B2 storage for lab-report PDFs"
+    title = "Make the backend deployable: api/ adapter and Postgres support"
     body = (
         "## Summary\n"
-        "- New object storage layer (backend/object_storage.py): lab-report PDFs upload to a Backblaze B2 bucket via the S3-compatible API when B2_* env vars are set, with endpoint auto-discovery\n"
-        "- Local-disk fallback (backend/storage/pdfs/) preserved exactly for dev when keys are absent — preview behavior unchanged\n"
-        "- parser.py pipeline reworked: PDFs persist through the storage layer, MarkItDown runs from bytes via temp files, failed uploads are cleaned up in both modes\n"
-        "- boto3 added to requirements.txt (installed by CI and production hosting)\n"
-        "- Branch-name parsing fix in the sync tooling (refs/heads/feat/health-dashboard was truncated)\n"
+        "- New `api/index.py` ASGI entrypoint for Freebuff's Python hosting: puts `backend/` on `sys.path` (the backend uses flat imports), re-exports `app`, and runs idempotent `init_db()` at import because serverless hosts do not reliably fire ASGI startup events; a DB failure is logged instead of raised so `/health` still answers\n"
+        "- `backend/database.py` now reads `DATABASE_URL` (Postgres in production) and keeps SQLite at `backend/health.db` as the dev/CI fallback; `postgres://` URLs are normalized, Postgres uses `pool_pre_ping`/`pool_recycle` for hosted idle-connection drops, and storage directories fall back to the temp dir on read-only filesystems\n"
+        "- `api/requirements.txt` is the canonical dependency list (adds `psycopg2-binary`); `backend/requirements.txt` includes it so there is a single source of truth for CI and hosting\n"
+        "- Docs: `DATABASE_URL` documented in `env.example` and README, plus a short production section; stale `backend/.env.example` reference corrected\n"
         "\n## Test plan\n"
-        "- Backend import + table-schema check pass (user, exam, exambiomarker, medication)\n"
-        "- End-to-end pipeline verified locally with live Groq: CBC report -> title/date + Hemoglobin 13.5 g/dL (normal), Glucose 118 mg/dL (flagged abnormal), no errors\n"
-        "- CI: frontend typecheck/build and backend import/schema workflows" 
+        "- Backend import + table-schema check pass (user, exam, exambiomarker, medication) on SQLite\n"
+        "- Postgres path: engine reports dialect postgresql/driver psycopg2, legacy `postgres://` normalized, all four tables compile to valid Postgres DDL\n"
+        "- Live run of the adapter: `/health`, `/api/auth/config`, `/api/auth/me`, `/api/exams`, `/api/medications`, `/api/calendar`, analytics all 200; unauthenticated request 401; medication insert + read-back OK; unreachable DB degrades without killing the app\n"
+        "- `freebuff-deploy check`: deployable, no problems; preview restart healthy (200)\n"
+        "- CI: frontend typecheck/build and backend import/schema workflows"
     )
     status, pr = req("POST", f"/repos/{REPO}/pulls",
                      {"title": title, "body": body, "head": BRANCH, "base": base})
