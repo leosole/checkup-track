@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 
 API = "https://api.github.com"
-REPO = "leosole/exametry"
+REPO = "leosole/checkup-track"  # renamed from leosole/exametry; GitHub redirects git, not API POSTs
 BRANCH = "feat/health-dashboard"
 
 # Integration tooling that lives only as untracked files locally but belongs
