@@ -1,4 +1,4 @@
-# exametry — Health Dashboard Monorepo
+# CheckUpTrack — Health Dashboard Monorepo
 
 Google-signed-in health dashboard that parses lab-report PDFs into structured
 biomarker data (via MarkItDown + Groq) and visualizes exams, medications,
