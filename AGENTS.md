@@ -1,4 +1,4 @@
-# Agent instructions — exametry
+# Agent instructions — CheckUpTrack
 
 Read this before changing anything. It assumes you already know how to code;
 it exists to stop you from breaking conventions that are not obvious from the
@@ -91,9 +91,9 @@ to `0.0.0.0` and reads `$PORT` for the frontend.
   `Authorization: Bearer …`. Never move verification to the client.
 - **Frontend has no router.** `app.tsx` switches on auth state. Don't add a
   routing library for one screen.
-- **The localStorage token key is still `vitals.jwt`** from before the rename to
-  exametry. Renaming it signs every existing user out; do it deliberately or not
-  at all.
+- **The localStorage token key is still `vitals.jwt`**, a leftover from the
+  project's earlier names. Renaming it signs every existing user out; do it
+  deliberately or not at all.
 - **Frontend naming is lowercase-with-hyphens** (`dashboard-view.tsx`,
   `analytics-chart.tsx`). UI primitives live in `components/ui/`; feature
   components sit directly in `components/`. Keep components small and read
