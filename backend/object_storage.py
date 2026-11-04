@@ -11,6 +11,11 @@ import logging
 import os
 from pathlib import Path
 
+from env_loader import load_env_files
+
+# B2 credentials come from the environment, so read ``.env.local`` first.
+load_env_files()
+
 logger = logging.getLogger("object_storage")
 
 _KEY_ID = os.environ.get("B2_KEY_ID", "").strip()

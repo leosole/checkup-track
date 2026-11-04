@@ -15,7 +15,9 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## Environment
 
-Copy `.env.example` and set:
+Copy `.env.example` to `.env.local` in the repo root and set the values; the app
+loads that file (and `.env`) automatically, while variables you export yourself
+take precedence:
 
 - `GROQ_API_KEY` — Groq key used for LLM extraction (`llama-3.3-70b-versatile`, fallback `llama-3.1-8b-instant`)
 - `GOOGLE_CLIENT_ID` — Google OAuth web client ID for ID-token verification

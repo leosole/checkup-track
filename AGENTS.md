@@ -37,8 +37,6 @@ frontend/src/auth-context.tsx  user bootstrap; JWT lives in localStorage (`vital
 frontend/src/components/  dashboard-view, calendar-grid, analytics-chart,
                           medication-modal, sign-in-view, ui/ primitives
 scripts/preview.sh      starts uvicorn (8000) + vite ($PORT) for the preview
-scripts/github_sync.py  PR/checks/merge via the GitHub API
-scripts/push_history.py commit + push helper
 ```
 
 ## Commands
@@ -60,8 +58,8 @@ import + table-schema assertion in `backend/`. Do not add slow or network-heavy
 steps to CI.
 
 In the Freebuff workspace, do **not** start the dev server by hand. Use
-`freebuff-preview restart` / `status`; `scripts/preview.sh` binds both processes
-to `0.0.0.0` and reads `$PORT` for the frontend.
+`freebuff-preview restart` / `status`; `sh scripts/preview.sh` binds both
+processes to `0.0.0.0` and reads `$PORT` for the frontend.
 
 ## Conventions that matter
 
@@ -104,6 +102,12 @@ to `0.0.0.0` and reads `$PORT` for the frontend.
   remove the Tailwind directives, theme variables, or body styles.
 - **`vite.config.ts` has HMR disabled on purpose** and a dev proxy to 8000.
   Leave it alone.
+- **Use `git` and `gh` for GitHub work.** The former
+  `scripts/git-askpass.sh`, `github_sync.py`, `push_history.py` and
+  `sync_branches.py` were sandbox workarounds that pulled a token out of
+  `.env.local` to bypass unauthenticated git; they have been removed. Do not
+  reintroduce askpass/token-wrapper scripts or read `.env.local` for a
+  credential.
 
 ## Environment
 
@@ -115,10 +119,14 @@ to `0.0.0.0` and reads `$PORT` for the frontend.
 | `DATABASE_URL` | Postgres in production | falls back to SQLite |
 | `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` | durable PDF storage | local disk (ephemeral in production) |
 
-`env.example` is the template; `.env.local` holds real dev values and is loaded
-automatically into terminals and the preview. Never read or print it. Production
-variables are managed separately (`freebuff-deploy env set`) and GitHub Actions
-secrets do not reach the running app — they only exist inside CI runners.
+`env.example` is the template; `.env.local` holds real dev values. Never read or
+print it. `backend/env_loader.py` loads `.env.local` / `.env` into `os.environ`
+when the backend is imported (existing shell/CI/platform values always win), so
+plain `uvicorn main:app` picks them up too — do not reintroduce `--env-file`
+flags or shell `source` steps, and keep the `load_env_files()` call before any
+module reads configuration. Production variables are managed separately
+(`freebuff-deploy env set`) and GitHub Actions secrets do not reach the running
+app — they only exist inside CI runners.
 
 ## API map
 

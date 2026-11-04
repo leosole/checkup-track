@@ -13,6 +13,11 @@ from typing import Iterator
 
 from sqlmodel import Session, SQLModel, create_engine
 
+from env_loader import load_env_files
+
+# ``.env.local`` has to be read before anything below inspects the environment.
+load_env_files()
+
 BASE_DIR = Path(__file__).resolve().parent
 STORAGE_DIR = BASE_DIR / "storage"
 DATABASE_PATH = BASE_DIR / "health.db"
@@ -21,9 +26,17 @@ DEFAULT_DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 
 
 def _normalize_database_url(url: str) -> str:
-    """Accept the legacy ``postgres://`` spelling some providers hand out."""
+    """Accept the legacy ``postgres://`` spelling and pin the installed driver.
+
+    SQLAlchemy 2.1 resolves a bare ``postgresql://`` URL to the psycopg (v3)
+    driver, but this project installs psycopg2-binary. Naming the driver keeps
+    the URL working across SQLAlchemy releases; URLs that already name one are
+    left untouched.
+    """
     if url.startswith("postgres://"):
-        return "postgresql://" + url[len("postgres://") :]
+        url = "postgresql://" + url[len("postgres://") :]
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg2://" + url[len("postgresql://") :]
     return url
 
 
