@@ -248,16 +248,14 @@ def cmd_pr():
     if status == 200 and pulls:
         print("PR already open:", pulls[0]["html_url"], "#", pulls[0]["number"])
         return
-    title = "Add AGENTS.md with project instructions for coding agents"
+    title = "Rename the product in AGENTS.md to CheckUpTrack"
     body = (
         "## Summary\n"
-        "- New `AGENTS.md` at the repo root describing what exametry is and how to work on it safely: the PDF -> Markdown -> Groq extraction pipeline, the two-process layout (FastAPI on 8000, Vite on 5173), and a one-line purpose per meaningful file\n"
-        "- Documents the conventions that are easy to break: flat backend imports and why `api/index.py` manipulates `sys.path`, the adapter being a shim rather than a second app, schema created with `create_all` and no migrations, keeping SQLite and Postgres paths both working, B2-vs-local storage parity, and server-side Google ID-token verification\n"
-        "- Captures frontend rules: no router (auth-state switch in `app.tsx`), lowercase-hyphen filenames, reuse of `components/ui` primitives and the existing Tailwind tokens, and HMR disabled in `vite.config.ts` on purpose\n"
-        "- Environment table for `GROQ_API_KEY`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `DATABASE_URL`, `B2_*` including how the app degrades when each is missing, and the reminder that GitHub Actions secrets never reach the running app\n"
-        "- API map, a concrete verification recipe (import/schema check, typecheck, endpoint smoke against a throwaway DB, `freebuff-deploy check`), and known constraints (hosting body limits below the app's 25 MB guard, non-deterministic LLM extraction)\n"
+        "- `AGENTS.md` still called the project `exametry`, but the default branch was renamed to CheckUpTrack in #`22c0a92`\n"
+        "- Updates the title and rewords the `vitals.jwt` localStorage note so it no longer refers to the old name\n"
+        "- Docs only; no behavior changes\n"
         "\n## Test plan\n"
-        "- Every statement checked against the source: `models.py`, `main.py`, `auth.py`, `api-client.ts`, `auth-context.tsx`, `vite.config.ts`, the CI workflow and `scripts/preview.sh`\n"
+        "- `git grep -n exametry AGENTS.md` returns nothing\n"
         "- Documentation-only change; CI should be unaffected"
     )
     status, pr = req("POST", f"/repos/{REPO}/pulls",
