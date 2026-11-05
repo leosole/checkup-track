@@ -110,8 +110,14 @@ function PrivacyPolicyRoute() {
             </h2>
             <p>
               For privacy questions or data-deletion requests, contact the
-              operator responsible for your CheckUpTrack deployment using the
-              contact information provided with that service.
+              operator through GitHub at{" "}
+              <a
+                href="https://github.com/leosole"
+                className="font-medium text-brand-700 underline dark:text-brand-300"
+              >
+                @leosole
+              </a>
+              . Please do not share health information in public posts or issues.
             </p>
           </section>
         </div>

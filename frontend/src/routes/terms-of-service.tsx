@@ -102,9 +102,15 @@ function TermsOfServiceRoute() {
               Contact
             </h2>
             <p>
-              For questions about these terms, contact the operator responsible
-              for your CheckUpTrack deployment using the contact information
-              provided with that service.
+              For questions about these terms, contact the operator through
+              GitHub at{" "}
+              <a
+                href="https://github.com/leosole"
+                className="font-medium text-brand-700 underline dark:text-brand-300"
+              >
+                @leosole
+              </a>
+              .
             </p>
           </section>
         </div>
