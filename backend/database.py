@@ -94,7 +94,7 @@ else:
 def init_db() -> None:
     """Create database tables (idempotent, safe on every cold start)."""
     # Import models so they register on the SQLModel metadata before create_all.
-    from models import Exam, ExamBiomarker, Medication, User  # noqa: F401
+    from models import Exam, ExamBiomarker, Medication, User, UserProviderCredential  # noqa: F401
 
     SQLModel.metadata.create_all(engine)
 

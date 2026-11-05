@@ -36,6 +36,7 @@ from auth import (
     upsert_user,
     verify_google_id_token,
 )
+from credentials import encrypt_api_key
 from database import MARKDOWN_DIR, get_session, init_db
 from models import (
     AuthResponse,
@@ -50,14 +51,19 @@ from models import (
     GoogleAuthRequest,
     GoogleConfigResponse,
     HealthResponse,
+    LLMProvider,
     Medication,
     MedicationCreate,
     MedicationResponse,
     MedicationUpdate,
+    ProviderCredentialInput,
+    ProviderCredentialStatus,
+    ProviderOrderUpdate,
     TimeSeries,
     TimeSeriesPoint,
     TimeSeriesResponse,
     User,
+    UserProviderCredential,
     UserResponse,
 )
 from parser import process_exam, search_exams
@@ -66,6 +72,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
+DEFAULT_PROVIDER_ORDER = tuple(provider.value for provider in LLMProvider)
 
 app = FastAPI(
     title="Health Dashboard API",
@@ -135,6 +142,140 @@ def google_sign_in(
 @app.get("/api/auth/me", response_model=UserResponse, tags=["auth"])
 def me(user: User = Depends(get_current_user)) -> UserResponse:
     return UserResponse(id=user.id, email=user.email, name=user.name)
+
+
+def _provider_statuses(
+    session: Session,
+    user_id: str,
+) -> List[ProviderCredentialStatus]:
+    rows = session.exec(
+        select(UserProviderCredential).where(UserProviderCredential.user_id == user_id)
+    ).all()
+    credentials = {row.provider: row for row in rows}
+    default_positions = {
+        provider: index for index, provider in enumerate(DEFAULT_PROVIDER_ORDER)
+    }
+    ordered_providers = sorted(
+        DEFAULT_PROVIDER_ORDER,
+        key=lambda provider: (
+            credentials[provider].order_index
+            if provider in credentials
+            else default_positions[provider],
+            default_positions[provider],
+        ),
+    )
+    return [
+        ProviderCredentialStatus(
+            provider=provider,
+            configured=bool(credentials.get(provider) and credentials[provider].encrypted_api_key),
+            order=index,
+        )
+        for index, provider in enumerate(ordered_providers)
+    ]
+
+
+@app.get(
+    "/api/profile/providers",
+    response_model=List[ProviderCredentialStatus],
+    tags=["profile"],
+)
+def list_provider_credentials(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> List[ProviderCredentialStatus]:
+    return _provider_statuses(session, user.id)
+
+
+@app.put(
+    "/api/profile/providers/order",
+    response_model=List[ProviderCredentialStatus],
+    tags=["profile"],
+)
+def update_provider_order(
+    payload: ProviderOrderUpdate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> List[ProviderCredentialStatus]:
+    providers = [provider.value for provider in payload.providers]
+    if len(providers) != len(DEFAULT_PROVIDER_ORDER) or set(providers) != set(
+        DEFAULT_PROVIDER_ORDER
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Order must include each supported provider exactly once.",
+        )
+
+    existing_rows = {
+        row.provider: row
+        for row in session.exec(
+            select(UserProviderCredential).where(
+                UserProviderCredential.user_id == user.id
+            )
+        ).all()
+    }
+    for index, provider in enumerate(providers):
+        row = existing_rows.get(provider) or UserProviderCredential(
+            user_id=user.id,
+            provider=provider,
+        )
+        row.order_index = index
+        session.add(row)
+    session.commit()
+    return _provider_statuses(session, user.id)
+
+
+@app.put(
+    "/api/profile/providers/{provider}",
+    response_model=List[ProviderCredentialStatus],
+    tags=["profile"],
+)
+def save_provider_credential(
+    provider: LLMProvider,
+    payload: ProviderCredentialInput,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> List[ProviderCredentialStatus]:
+    try:
+        encrypted_api_key = encrypt_api_key(payload.api_key)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    provider_name = provider.value
+    row = session.exec(
+        select(UserProviderCredential).where(
+            UserProviderCredential.user_id == user.id,
+            UserProviderCredential.provider == provider_name,
+        )
+    ).first()
+    if row is None:
+        row = UserProviderCredential(
+            user_id=user.id,
+            provider=provider_name,
+            order_index=DEFAULT_PROVIDER_ORDER.index(provider_name),
+        )
+    row.encrypted_api_key = encrypted_api_key
+    session.add(row)
+    session.commit()
+    return _provider_statuses(session, user.id)
+
+
+@app.delete("/api/profile/providers/{provider}", status_code=204, tags=["profile"])
+def delete_provider_credential(
+    provider: LLMProvider,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Response:
+    row = session.exec(
+        select(UserProviderCredential).where(
+            UserProviderCredential.user_id == user.id,
+            UserProviderCredential.provider == provider.value,
+        )
+    ).first()
+    if row is not None:
+        row.encrypted_api_key = None
+        session.add(row)
+        session.commit()
+    return Response(status_code=204)
 
 
 # ---------------------------------------------------------------------------

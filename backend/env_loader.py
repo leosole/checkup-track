@@ -5,7 +5,7 @@ in the process ever reads that file: a plain ``uvicorn main:app`` (or any
 script importing backend modules) only sees variables the shell already
 exported. Importing this module first loads the known dotenv files into
 ``os.environ`` so ``DATABASE_URL``, ``GOOGLE_CLIENT_ID``, ``B2_*`` and
-``GROQ_API_KEY`` behave the same however the app is started.
+``CREDENTIAL_ENCRYPTION_KEY`` behave the same however the app is started.
 
 Rules:
 

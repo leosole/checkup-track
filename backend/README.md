@@ -15,13 +15,17 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## Environment
 
-Copy `.env.example` to `.env.local` in the repo root and set the values; the app
-loads that file (and `.env`) automatically, while variables you export yourself
+Set these backend values in `.env.local` or the deployment environment; the app
+loads local dotenv files automatically, while variables you export yourself
 take precedence:
 
-- `GEMINI_API_KEY` — Gemini key used for LLM extraction (default `gemini-3.8-flash`, override with `GEMINI_MODEL`); tried first because its free tier accepts a whole report in one request. `GROQ_API_KEY` is the fallback (`openai/gpt-oss-120b`, `qwen/qwen3.8-27b`, `openai/gpt-oss-20b`).
+- `CREDENTIAL_ENCRYPTION_KEY` — stable high-entropy secret used to encrypt user-supplied LLM keys at rest; do not rotate without re-encrypting saved keys
 - `GOOGLE_CLIENT_ID` — Google OAuth web client ID for ID-token verification
 - `JWT_SECRET` — signing secret for local JWTs (a generated dev secret is persisted to `.jwt_secret` when unset)
+
+Each user adds provider keys and chooses their order in Profile. Supported
+providers are Gemini, Groq, OpenAI, Claude, DeepSeek, Mistral, and OpenRouter.
+The API decrypts keys at runtime, so the hosting operator remains trusted.
 
 ## Endpoints
 
@@ -31,6 +35,10 @@ take precedence:
 | GET | `/api/auth/config` | – | Google client ID for the frontend |
 | POST | `/api/auth/google` | – | Verify Google ID token → issue local JWT |
 | GET | `/api/auth/me` | JWT | Current user profile |
+| GET | `/api/profile/providers` | JWT | Provider setup status and order, never keys |
+| PUT | `/api/profile/providers/{provider}` | JWT | Save or replace a provider key |
+| DELETE | `/api/profile/providers/{provider}` | JWT | Remove a provider key |
+| PUT | `/api/profile/providers/order` | JWT | Set the complete provider order |
 | POST | `/api/exams/upload` | JWT | Upload a lab-report PDF (parse → extract → insert) |
 | GET | `/api/exams` | JWT | List exams with biomarkers |
 | GET | `/api/exams/search?q=` | JWT | Global text search over exams/biomarkers |

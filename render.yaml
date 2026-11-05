@@ -29,15 +29,11 @@ services:
         value: "1"
       - key: JWT_SECRET
         generateValue: true
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        generateValue: true
       - key: DATABASE_URL
         sync: false
       - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GEMINI_MODEL
-        sync: false
-      - key: GROQ_API_KEY
         sync: false
       - key: B2_KEY_ID
         sync: false

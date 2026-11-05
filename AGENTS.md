@@ -7,8 +7,8 @@ file tree.
 ## What this is
 
 A personal health-record dashboard. A signed-in user uploads a lab-report PDF;
-the backend converts it to Markdown, asks Groq (an LLM) for structured data, and
-stores the exam plus its individual biomarkers. The UI then shows exam history,
+the backend converts it to Markdown, calls the user's ordered LLM provider list,
+and stores the exam plus its individual biomarkers. The UI then shows exam history,
 biomarker trends, a medication list, and a calendar of exams and medications.
 
 Two processes, one repo:
@@ -17,8 +17,8 @@ Two processes, one repo:
 - `frontend/` — React 18 + Vite + Tailwind, a single-page app. Proxies `/api`
   and `/health` to 8000 in dev.
 
-There are no tests. "Verified" means the CI steps below pass plus a manual API
-smoke test (see *Verification*).
+Focused backend tests live in `backend/tests/`. "Verified" means the CI steps
+below pass plus a manual API smoke test (see *Verification*).
 
 ## Layout
 
@@ -29,7 +29,8 @@ backend/main.py         all routes, auth dependencies, upload size guard
 backend/models.py       SQLModel tables + Pydantic request/response schemas
 backend/database.py     engine/session setup, DATABASE_URL vs SQLite, init_db()
 backend/auth.py         Google ID-token verification, JWT issue/verify, current user
-backend/parser.py       PDF -> Markdown -> Gemini (primary) / Groq (fallback) extraction, exam search
+backend/parser.py       PDF -> Markdown -> ordered per-user provider extraction, exam search
+backend/credentials.py  authenticated encryption/decryption for provider API keys
 backend/object_storage.py  Backblaze B2 (S3 API) with local-disk fallback
 frontend/src/app.tsx    auth gate: SignInView when signed out, DashboardView when signed in
 frontend/src/api-client.ts  typed fetch wrapper; every protected call sends Bearer token
@@ -42,7 +43,8 @@ scripts/preview.sh      starts uvicorn (8000) + vite (5173 by default) locally
 ## Commands
 
 ```bash
-# backend (needs GEMINI_API_KEY or GROQ_API_KEY for uploads); create the venv once:
+# backend; create the venv once. Upload extraction requires a signed-in user with
+# at least one provider key configured in Profile and CREDENTIAL_ENCRYPTION_KEY:
 #   cd backend && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 # Always run the backend with the venv interpreter: the system `python3` may be
 # older than the dependencies allow (uvicorn, markitdown).
@@ -59,9 +61,9 @@ npm --prefix frontend run build      # vite build -> frontend/dist
 ```
 
 CI (`.github/workflows/ci.yml`) runs exactly: `npm ci && npm run typecheck &&
-npm run build` in `frontend/`, and `pip install -r requirements.txt` plus an
-import + table-schema assertion in `backend/`. Do not add slow or network-heavy
-steps to CI.
+npm run build` in `frontend/`, and `pip install -r requirements.txt`, focused
+`unittest` checks, and a table-schema assertion in `backend/`. Do not add slow or
+network-heavy steps to CI.
 
 ## Conventions that matter
 
@@ -116,9 +118,7 @@ steps to CI.
 
 | Key | Needed for | Missing behavior |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | PDF extraction (primary provider) | falls back to Groq; upload fails with a config error when neither key is set |
-| `GEMINI_MODEL` | optional model override | defaults to `gemini-3.8-flash` |
-| `GROQ_API_KEY` | PDF extraction (fallback: `openai/gpt-oss-120b` -> `qwen/qwen3.8-27b` -> `openai/gpt-oss-20b`) | upload fails with a config error when neither key is set |
+| `CREDENTIAL_ENCRYPTION_KEY` | encrypting user-owned provider keys at rest | saving keys fails closed; keep the value stable or saved keys become unreadable |
 | `GOOGLE_CLIENT_ID` | sign-in | `/api/auth/config` reports not configured, sign-in disabled |
 | `JWT_SECRET` | signing tokens | dev: auto-generated `backend/.jwt_secret`; prod: unstable tokens |
 | `DATABASE_URL` | Postgres in production | falls back to SQLite |
@@ -134,10 +134,17 @@ module reads configuration. Configure production variables in Render's service
 environment; GitHub Actions secrets are only available inside CI and do not
 reach the running app.
 
+Provider API keys are entered by each user in Profile, encrypted before database
+storage, and never returned by the profile API. The backend decrypts them at
+runtime, so the Render service owner remains trusted. Supported providers are
+Gemini, Groq, OpenAI, Claude, DeepSeek, Mistral, and OpenRouter.
+
 ## API map
 
 Public: `GET /health`, `GET /api/auth/config`, `POST /api/auth/google`.
-JWT: `GET /api/auth/me`; `POST /api/exams/upload` (multipart `file` + optional
+JWT: `GET /api/auth/me`; `GET /api/profile/providers`,
+`PUT /api/profile/providers/{provider}`, `DELETE /api/profile/providers/{provider}`,
+`PUT /api/profile/providers/order`; `POST /api/exams/upload` (multipart `file` + optional
 `title`, ≤ 25 MB); `GET /api/exams`; `PATCH /api/exams/{id}` (rename);
 `GET /api/exams/{id}/pdf` (streams the stored PDF); `GET /api/exams/search?q=`;
 `POST|GET /api/medications`, `PATCH|DELETE /api/medications/{id}`;
@@ -149,7 +156,7 @@ Routes keep the `/api/` prefix so the Vite proxy and the Render-hosted SPA work.
 
 Before calling work done:
 
-1. `cd backend && .venv/bin/python -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, user`.
+1. `cd backend && .venv/bin/python -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, user, userprovidercredential`.
 2. `npm --prefix frontend run typecheck` (and `build` when touching UI).
 3. Smoke the changed endpoints against a running backend. Use a throwaway DB
    (e.g. `DATABASE_URL=sqlite:////tmp/smoke.db`) so you never pollute `backend/health.db`.
@@ -162,8 +169,9 @@ Before calling work done:
 
 - Hosting caps request bodies around a few MB, below the app's 25 MB upload
   guard; large PDFs will fail in production even though they pass locally.
-- Parsing is LLM-based and non-deterministic; `parser.py` pins a primary Groq
-  model with fallbacks, but do not assert exact extracted values in tests.
+- Parsing is LLM-based and non-deterministic; provider models may change and
+  failover can send report text to multiple configured providers. Do not assert
+  exact extracted values in tests.
 - All dates are plain `date` columns (`Exam.date_performed`, `Medication.start_date`/
   `end_date`) serialized as ISO `YYYY-MM-DD`. Keep new date logic consistent with
   `CalendarExam` and `frontend/src/date-utils.ts`; avoid inventing timestamps.

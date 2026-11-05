@@ -37,11 +37,13 @@ jobs:
           python-version: "3.10"
       - run: pip install -r requirements.txt
       - run: |
+          python -m unittest discover -s tests
           python -c "
           import main, parser, auth, database, models
           from sqlmodel import SQLModel
           assert set(SQLModel.metadata.tables) >= {
-              'user', 'exam', 'exambiomarker', 'medication'
+            'user', 'exam', 'exambiomarker', 'medication',
+            'userprovidercredential'
           }
           print('backend imports + schema OK')
           "

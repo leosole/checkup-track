@@ -11,7 +11,6 @@ Flow:
 
 import json
 import logging
-import os
 import re
 import tempfile
 import uuid
@@ -19,12 +18,15 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from anthropic import Anthropic
+from cryptography.fernet import InvalidToken
 from groq import Groq
 from markitdown import MarkItDown
 from openai import OpenAI
 from sqlmodel import Session, select
 
 import object_storage
+from credentials import decrypt_api_key
 from database import MARKDOWN_DIR, PDF_DIR, engine
 from models import (
     BiomarkerResponse,
@@ -32,13 +34,13 @@ from models import (
     ExamBiomarker,
     ExamResponse,
     LLMExamsExtractionSchema,
+    LLMProvider,
+    UserProviderCredential,
 )
 
 logger = logging.getLogger("parser")
 
-# Extraction providers. Gemini is tried first when GEMINI_API_KEY is set: its
-# free tier accepts a whole report in one request, while Groq's free plan caps a
-# model at 8000 tokens per minute (which is why the Groq path truncates).
+# Provider defaults. Users control the provider order and supply their own keys.
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 # Gemini's context window swallows a full report; keep a ceiling anyway so a
@@ -54,6 +56,32 @@ FALLBACK_MODELS = (
 )
 # Groq's free tier rejects prompts above its per-minute token budget.
 GROQ_MAX_CHARS = 60_000
+DEFAULT_PROVIDER_MAX_CHARS = 200_000
+
+OPENAI_COMPATIBLE_PROVIDERS = {
+    LLMProvider.GEMINI: (
+        GEMINI_BASE_URL,
+        DEFAULT_GEMINI_MODEL,
+        GEMINI_MAX_CHARS,
+    ),
+    LLMProvider.OPENAI: (None, "gpt-4o-mini", DEFAULT_PROVIDER_MAX_CHARS),
+    LLMProvider.DEEPSEEK: (
+        "https://api.deepseek.com",
+        "deepseek-flash",
+        DEFAULT_PROVIDER_MAX_CHARS,
+    ),
+    LLMProvider.MISTRAL: (
+        "https://api.mistral.ai/v1",
+        "mistral-small-latest",
+        DEFAULT_PROVIDER_MAX_CHARS,
+    ),
+    LLMProvider.OPENROUTER: (
+        "https://openrouter.ai/api/v1",
+        "openai/gpt-4o-mini",
+        DEFAULT_PROVIDER_MAX_CHARS,
+    ),
+}
+ANTHROPIC_MODEL = "claude-haiku-5-5"
 
 JSON_FENCE_RE = re.compile(r"^```(?:json)?|```$", re.IGNORECASE | re.MULTILINE)
 
@@ -209,50 +237,103 @@ def _call_model(
         return _invoke_model(client, model, markdown, max_chars, False)
 
 
-def _extract_structured(
+def _extract_anthropic(
+    api_key: str,
     markdown: str,
-) -> Tuple[Optional[LLMExamsExtractionSchema], Optional[str]]:
-    """Step 3: Gemini first when configured, then the Groq fallback chain.
+) -> LLMExamsExtractionSchema:
+    client = Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=8192,
+        system=_system_prompt(),
+        messages=[{"role": "user", "content": markdown[:DEFAULT_PROVIDER_MAX_CHARS]}],
+        temperature=0,
+    )
+    content = "\n".join(
+        block.text for block in response.content if getattr(block, "type", None) == "text"
+    )
+    if not content.strip():
+        raise ValueError("Anthropic returned an empty completion.")
+    return LLMExamsExtractionSchema.model_validate_json(_strip_json_fences(content))
 
-    Returns (extraction, error_message). Exactly one of them is None.
-    """
-    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
-    if not gemini_key and not groq_key:
-        return None, (
-            "No extraction provider is configured: set GEMINI_API_KEY "
-            "(or GROQ_API_KEY) on this server."
-        )
 
-    problems: List[str] = []
+def _extract_provider(
+    provider: LLMProvider,
+    api_key: str,
+    markdown: str,
+) -> LLMExamsExtractionSchema:
+    if provider == LLMProvider.ANTHROPIC:
+        return _extract_anthropic(api_key, markdown)
 
-    if gemini_key:
-        model = os.environ.get("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
-        client = OpenAI(api_key=gemini_key, base_url=GEMINI_BASE_URL)
-        try:
-            extraction = _call_model(
-                client,
-                model,
-                markdown,
-                GEMINI_MAX_CHARS,
-                retry_without_json_mode=True,
-            )
-            return extraction, None
-        except Exception as exc:  # noqa: BLE001 - report and fall back
-            problems.append(f"{model}: {exc}")
-            logger.warning("Gemini extraction failed via %s: %s", model, exc)
-
-    if groq_key:
-        client = Groq(api_key=groq_key)
+    if provider == LLMProvider.GROQ:
+        client = Groq(api_key=api_key)
         for model in (PRIMARY_MODEL, *FALLBACK_MODELS):
             try:
-                extraction = _call_model(client, model, markdown, GROQ_MAX_CHARS)
-                return extraction, None
-            except Exception as exc:  # noqa: BLE001 - report and fall back
-                problems.append(f"{model}: {exc}")
-                logger.warning("Groq extraction failed via %s: %s", model, exc)
+                return _call_model(client, model, markdown, GROQ_MAX_CHARS)
+            except Exception:
+                if model == FALLBACK_MODELS[-1]:
+                    raise
+        raise RuntimeError("No Groq model succeeded.")
 
-    return None, f"Structured extraction failed ({'; '.join(problems)})"
+    base_url, model, max_chars = OPENAI_COMPATIBLE_PROVIDERS[provider]
+    client_options = {"base_url": base_url} if base_url else {}
+    client = OpenAI(api_key=api_key, **client_options)
+    return _call_model(
+        client,
+        model,
+        markdown,
+        max_chars,
+        retry_without_json_mode=provider == LLMProvider.GEMINI,
+    )
+
+
+def _configured_provider_credentials(
+    user_id: str,
+) -> Tuple[List[Tuple[LLMProvider, str]], Optional[str]]:
+    with Session(engine) as session:
+        rows = session.exec(
+            select(UserProviderCredential)
+            .where(UserProviderCredential.user_id == user_id)
+            .where(UserProviderCredential.encrypted_api_key.is_not(None))
+            .order_by(UserProviderCredential.order_index)
+        ).all()
+
+    try:
+        providers = [
+            (LLMProvider(row.provider), decrypt_api_key(row.encrypted_api_key))
+            for row in rows
+            if row.encrypted_api_key
+        ]
+    except (InvalidToken, RuntimeError, UnicodeDecodeError, ValueError):
+        logger.error("Could not decrypt saved provider credentials for user %s", user_id)
+        return [], "Saved LLM credentials could not be loaded. Check server encryption configuration."
+    return providers, None
+
+
+def _extract_structured(
+    markdown: str,
+    providers: List[Tuple[LLMProvider, str]],
+) -> Tuple[Optional[LLMExamsExtractionSchema], Optional[str]]:
+    """Try the user's providers in order, preserving strict schema validation."""
+    if not providers:
+        return None, "No LLM provider is configured. Add an API key in Profile."
+
+    failed_providers: List[str] = []
+    for provider, api_key in providers:
+        try:
+            return _extract_provider(provider, api_key, markdown), None
+        except Exception as exc:  # noqa: BLE001 - try the next configured provider
+            logger.warning(
+                "%s extraction failed (%s)",
+                provider.value,
+                type(exc).__name__,
+            )
+            failed_providers.append(provider.value)
+
+    return None, (
+        "Structured extraction failed for configured providers: "
+        + ", ".join(failed_providers)
+    )
 
 
 def _to_response(exam: Exam, biomarkers: List[ExamBiomarker]) -> ExamResponse:
@@ -304,8 +385,12 @@ def process_exam(
     md_rel = f"storage/markdowns/{md_path.name}"
     markdown = md_path.read_text(encoding="utf-8")
 
-    # Step 3: structured extraction via Groq.
-    extraction, extraction_error = _extract_structured(markdown)
+    # Step 3: structured extraction with this user's configured providers.
+    providers, credential_error = _configured_provider_credentials(user_id)
+    if credential_error:
+        extraction, extraction_error = None, credential_error
+    else:
+        extraction, extraction_error = _extract_structured(markdown, providers)
 
     requested_title = (title or "").strip()
     extracted_title = (extraction.title or "").strip() if extraction is not None else ""

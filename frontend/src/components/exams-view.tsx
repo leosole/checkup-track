@@ -11,6 +11,7 @@ export function ExamsView({
   exams,
   on_back,
   on_open_pdf,
+  on_select_exam,
   on_edit,
   on_deleted,
   on_upload,
@@ -21,6 +22,7 @@ export function ExamsView({
   exams: Exam[];
   on_back: () => void;
   on_open_pdf: (id: number) => void;
+  on_select_exam: (exam: Exam) => void;
   on_edit: (exam: Exam) => void;
   on_deleted: (id: number) => Promise<void>;
   on_upload: () => void;
@@ -225,7 +227,14 @@ export function ExamsView({
                       scope="row"
                       className="max-w-[360px] px-4 py-3 font-medium text-gray-900 dark:text-white"
                     >
-                      <span className="block truncate">{exam.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => on_select_exam(exam)}
+                        className="block max-w-full truncate text-left hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:hover:text-brand-300"
+                        aria-label={`View details for ${exam.title}`}
+                      >
+                        {exam.title}
+                      </button>
                     </th>
                     <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">
                       {format_date(exam.date_performed)}
@@ -239,6 +248,13 @@ export function ExamsView({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => on_open_pdf(exam.id)}
+                        >
+                          Open PDF
+                        </Button>
                         <button
                           type="button"
                           aria-label={`Edit ${exam.title}`}
@@ -250,13 +266,6 @@ export function ExamsView({
                             <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
                           </svg>
                         </button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => on_open_pdf(exam.id)}
-                        >
-                          Open PDF
-                        </Button>
                         <button
                           type="button"
                           aria-label={`Delete ${exam.title}`}

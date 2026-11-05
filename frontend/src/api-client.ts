@@ -9,6 +9,21 @@ export interface User {
   name: string;
 }
 
+export type ProviderId =
+  | "gemini"
+  | "groq"
+  | "openai"
+  | "anthropic"
+  | "deepseek"
+  | "mistral"
+  | "openrouter";
+
+export interface ProviderCredentialStatus {
+  provider: ProviderId;
+  configured: boolean;
+  order: number;
+}
+
 export interface AuthResponse {
   access_token: string;
   token_type: string;
@@ -154,6 +169,33 @@ export const api = {
 
   me(): Promise<User> {
     return request("/api/auth/me");
+  },
+
+  provider_credentials(): Promise<ProviderCredentialStatus[]> {
+    return request("/api/profile/providers");
+  },
+
+  save_provider_key(
+    provider: ProviderId,
+    api_key: string,
+  ): Promise<ProviderCredentialStatus[]> {
+    return request(`/api/profile/providers/${provider}`, {
+      method: "PUT",
+      body: JSON.stringify({ api_key }),
+    });
+  },
+
+  delete_provider_key(provider: ProviderId): Promise<void> {
+    return request(`/api/profile/providers/${provider}`, { method: "DELETE" });
+  },
+
+  update_provider_order(
+    providers: ProviderId[],
+  ): Promise<ProviderCredentialStatus[]> {
+    return request("/api/profile/providers/order", {
+      method: "PUT",
+      body: JSON.stringify({ providers }),
+    });
   },
 
   list_exams(): Promise<Exam[]> {

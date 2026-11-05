@@ -1,9 +1,10 @@
 """Database models (SQLModel tables) and API/LLM schemas (Pydantic)."""
 
 from datetime import date
+from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field as PydanticField
+from pydantic import BaseModel, Field as PydanticField, field_validator
 from sqlmodel import Field, SQLModel
 
 
@@ -16,6 +17,13 @@ class User(SQLModel, table=True):
     id: str = Field(primary_key=True)  # Google Sub ID
     email: str
     name: str
+
+
+class UserProviderCredential(SQLModel, table=True):
+    user_id: str = Field(foreign_key="user.id", primary_key=True)
+    provider: str = Field(primary_key=True)
+    encrypted_api_key: Optional[str] = None
+    order_index: int = Field(default=0)
 
 
 class Exam(SQLModel, table=True):
@@ -71,6 +79,38 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+
+
+class LLMProvider(str, Enum):
+    GEMINI = "gemini"
+    GROQ = "groq"
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    DEEPSEEK = "deepseek"
+    MISTRAL = "mistral"
+    OPENROUTER = "openrouter"
+
+
+class ProviderCredentialInput(BaseModel):
+    api_key: str = PydanticField(min_length=1, max_length=4096)
+
+    @field_validator("api_key")
+    @classmethod
+    def api_key_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("API key must not be blank.")
+        return value
+
+
+class ProviderOrderUpdate(BaseModel):
+    providers: List[LLMProvider]
+
+
+class ProviderCredentialStatus(BaseModel):
+    provider: LLMProvider
+    configured: bool
+    order: int
 
 
 class AuthResponse(BaseModel):

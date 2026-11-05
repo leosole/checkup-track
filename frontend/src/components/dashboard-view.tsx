@@ -23,6 +23,7 @@ import { ExamRenameModal } from "./exam-rename-modal";
 import { ExamsView } from "./exams-view";
 import { MedicationModal } from "./medication-modal";
 import { MedicationsView } from "./medications-view";
+import { ProfileView } from "./profile-view";
 import { Badge, Card, EmptyState, Spinner } from "./ui/badge";
 import { Button } from "./ui/button";
 
@@ -33,10 +34,16 @@ const FIELD =
   "focus:ring-brand-600 dark:bg-gray-900 dark:text-gray-100 dark:ring-gray-700 " +
   "dark:placeholder:text-gray-500";
 
-type DashboardRoute = "/" | "/exams" | "/medications";
+type DashboardRoute = "/" | "/exams" | "/medications" | "/profile";
 
 function route_from_path(pathname: string): DashboardRoute {
-  if (pathname === "/exams" || pathname === "/medications") return pathname;
+  if (
+    pathname === "/exams" ||
+    pathname === "/medications" ||
+    pathname === "/profile"
+  ) {
+    return pathname;
+  }
   return "/";
 }
 
@@ -124,8 +131,8 @@ export function DashboardView() {
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (route !== "/profile") void refresh();
+  }, [refresh, route]);
 
   useEffect(() => {
     const sync_route = () => {
@@ -455,7 +462,7 @@ export function DashboardView() {
               >
                 {(user?.name || "?").charAt(0).toUpperCase()}
               </button>
-              <div className="invisible absolute right-0 top-full z-40 w-56 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100">
+              <div className="invisible absolute right-0 top-full z-40 w-56 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
                 <div className="rounded-xl bg-white p-3 shadow-untitled-lg ring-1 ring-gray-900/5 dark:bg-gray-900 dark:shadow-none dark:ring-white/10">
                   <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
                     {user?.name}
@@ -465,8 +472,15 @@ export function DashboardView() {
                   </p>
                   <button
                     type="button"
-                    onClick={sign_out}
+                    onClick={() => navigate("/profile")}
                     className="mt-2 w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                  >
+                    Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={sign_out}
+                    className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
                   >
                     Sign out
                   </button>
@@ -621,9 +635,14 @@ export function DashboardView() {
                         </form>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <h3 className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                          <button
+                            type="button"
+                            onClick={() => show_calendar_exam(exam.id)}
+                            aria-label={`View details for ${exam.title}`}
+                            className="truncate text-left text-sm font-semibold text-gray-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
+                          >
                             {exam.title}
-                          </h3>
+                          </button>
                           <button
                             type="button"
                             aria-label={`Rename ${exam.title}`}
@@ -840,6 +859,7 @@ export function DashboardView() {
               exams={exams}
               on_back={() => navigate("/")}
               on_open_pdf={(id) => void open_exam_pdf(id)}
+              on_select_exam={(exam) => show_calendar_exam(exam.id)}
               on_edit={set_rename_modal_exam}
               on_upload={() => file_input_ref.current?.click()}
               uploading={uploading}
@@ -877,6 +897,12 @@ export function DashboardView() {
               }}
             />
           )}
+        </main>
+      )}
+
+      {route === "/profile" && (
+        <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+          <ProfileView on_back={() => navigate("/")} />
         </main>
       )}
 
