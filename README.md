@@ -62,10 +62,12 @@ All frontend files use lowercase-with-hyphens naming (`app.tsx`,
 | GET | `/api/auth/config` | – |
 | POST | `/api/auth/google` | – (Google ID token → local JWT) |
 | GET | `/api/auth/me` | JWT |
-| POST | `/api/exams/upload` | JWT |
+| POST | `/api/exams/upload` (multipart `file`, optional `title`) | JWT |
 | GET | `/api/exams` | JWT |
+| PATCH | `/api/exams/{id}` (rename) | JWT |
+| GET | `/api/exams/{id}/pdf` | JWT |
 | GET | `/api/exams/search?q=` | JWT |
-| POST/GET/DELETE | `/api/medications` | JWT |
+| POST/GET/PATCH/DELETE | `/api/medications` | JWT |
 | GET | `/api/calendar` | JWT |
 | GET | `/api/analytics/time-series?start_date&end_date&specs=A&specs=B` | JWT |
 

@@ -124,6 +124,23 @@ class MedicationResponse(BaseModel):
     end_date: Optional[date] = None
 
 
+class MedicationUpdate(BaseModel):
+    """Partial medication update: omitted fields keep their current value.
+
+    An explicit ``end_date: null`` clears the end date (ongoing regimen).
+    """
+
+    medication_name: Optional[str] = PydanticField(default=None, min_length=1, max_length=200)
+    dosage: Optional[str] = PydanticField(default=None, min_length=1, max_length=200)
+    frequency_per_day: Optional[int] = PydanticField(default=None, ge=1, le=32)
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
+class ExamRename(BaseModel):
+    title: str = PydanticField(min_length=1, max_length=200)
+
+
 class CalendarExam(BaseModel):
     id: int
     title: str

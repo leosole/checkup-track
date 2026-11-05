@@ -208,8 +208,13 @@ def process_exam(
     pdf_bytes: bytes,
     filename: str,
     user_id: str,
+    title: Optional[str] = None,
 ) -> ExamResponse:
-    """Full ingestion pipeline; returns the created exam with its biomarkers."""
+    """Full ingestion pipeline; returns the created exam with its biomarkers.
+
+    ``title`` is the name the user typed; when blank the extracted report
+    title is used, falling back to the PDF's file name.
+    """
     if not pdf_bytes:
         raise ValueError("The uploaded file is empty.")
     if not pdf_bytes.lstrip()[:5].startswith(b"%PDF"):
@@ -230,18 +235,25 @@ def process_exam(
     # Step 3: structured extraction via Groq.
     extraction, extraction_error = _extract_structured(markdown)
 
-    if extraction is None:
-        title = Path(filename).stem or "Untitled exam"
-        performed = _fallback_date(markdown)
+    requested_title = (title or "").strip()
+    extracted_title = (extraction.title or "").strip() if extraction is not None else ""
+    if requested_title:
+        exam_title = requested_title
+    elif extracted_title:
+        exam_title = extracted_title
     else:
-        title = (extraction.title or "").strip() or (Path(filename).stem or "Untitled exam")
-        performed = extraction.date_performed or _fallback_date(markdown)
+        exam_title = Path(filename).stem or "Untitled exam"
+    performed = (
+        extraction.date_performed
+        if extraction is not None and extraction.date_performed
+        else _fallback_date(markdown)
+    )
 
     # Step 4: insert rows scoped to the user.
     with Session(engine) as session:
         exam = Exam(
             user_id=user_id,
-            title=title,
+            title=exam_title,
             date_performed=performed,
             pdf_path=pdf_ref,
             markdown_path=md_rel,

@@ -15,6 +15,8 @@ import { Button } from "./ui/button";
 
 interface CalendarGridProps {
   data: CalendarData;
+  /** Open the stored PDF for an exam shown on the calendar. */
+  on_exam_click?: (exam_id: number) => void;
 }
 
 interface Bar {
@@ -38,7 +40,7 @@ const MED_COLORS = [
   "bg-orange-500",
 ];
 
-export function CalendarGrid({ data }: CalendarGridProps) {
+export function CalendarGrid({ data, on_exam_click }: CalendarGridProps) {
   const [cursor, set_cursor] = useState(() => start_of_month(new Date()));
 
   const days = useMemo(() => month_grid(cursor), [cursor]);
@@ -51,10 +53,10 @@ export function CalendarGrid({ data }: CalendarGridProps) {
   }, [days]);
 
   const exams_by_day = useMemo(() => {
-    const map = new Map<string, string[]>();
+    const map = new Map<string, CalendarData["exams"]>();
     for (const exam of data.exams) {
       const list = map.get(exam.date) ?? [];
-      list.push(exam.title);
+      list.push(exam);
       map.set(exam.date, list);
     }
     return map;
@@ -106,10 +108,12 @@ export function CalendarGrid({ data }: CalendarGridProps) {
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Health calendar</h3>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+            Health calendar
+          </h3>
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
             Exam days and active medication windows in one timeline
           </p>
         </div>
@@ -118,7 +122,7 @@ export function CalendarGrid({ data }: CalendarGridProps) {
             type="button"
             aria-label="Previous month"
             onClick={() => set_cursor(add_months(cursor, -1))}
-            className="rounded-lg bg-white p-2 text-gray-500 ring-1 ring-inset ring-gray-300 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            className="rounded-lg bg-white p-2 text-gray-500 ring-1 ring-inset ring-gray-300 transition-colors hover:bg-gray-50 hover:text-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
           >
             <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path
@@ -128,14 +132,14 @@ export function CalendarGrid({ data }: CalendarGridProps) {
               />
             </svg>
           </button>
-          <span className="min-w-[10.5rem] text-center text-sm font-semibold text-gray-900">
+          <span className="min-w-[10.5rem] text-center text-sm font-semibold text-gray-900 dark:text-white">
             {format_month_label(cursor)}
           </span>
           <button
             type="button"
             aria-label="Next month"
             onClick={() => set_cursor(add_months(cursor, 1))}
-            className="rounded-lg bg-white p-2 text-gray-500 ring-1 ring-inset ring-gray-300 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            className="rounded-lg bg-white p-2 text-gray-500 ring-1 ring-inset ring-gray-300 transition-colors hover:bg-gray-50 hover:text-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
           >
             <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path
@@ -161,21 +165,21 @@ export function CalendarGrid({ data }: CalendarGridProps) {
           {WEEKDAY_LABELS.map((label) => (
             <div
               key={label}
-              className="pb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400"
+              className="pb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
             >
               {label}
             </div>
           ))}
         </div>
 
-        <div className="overflow-hidden rounded-lg ring-1 ring-gray-200">
+        <div className="overflow-hidden rounded-lg ring-1 ring-gray-200 dark:ring-gray-800">
           {weeks.map((week, week_index) => {
             const lanes = bars_for_week(week);
             const lane_height = 20;
             return (
               <div
                 key={week_index}
-                className="grid grid-cols-7 border-b border-gray-200 last:border-b-0"
+                className="grid grid-cols-7 border-b border-gray-200 last:border-b-0 dark:border-gray-800"
               >
                 {week.map((day) => {
                   const iso = to_iso(day);
@@ -186,8 +190,10 @@ export function CalendarGrid({ data }: CalendarGridProps) {
                     <div
                       key={iso}
                       className={[
-                        "relative min-h-[76px] border-r border-gray-200 p-1.5 last:border-r-0",
-                        in_month ? "bg-white" : "bg-gray-50/70",
+                        "relative min-h-[76px] border-r border-gray-200 p-1.5 last:border-r-0 dark:border-gray-800",
+                        in_month
+                          ? "bg-white dark:bg-gray-900"
+                          : "bg-gray-50/70 dark:bg-gray-950/60",
                       ].join(" ")}
                     >
                       <span
@@ -196,26 +202,28 @@ export function CalendarGrid({ data }: CalendarGridProps) {
                           is_today
                             ? "bg-brand-600 text-white"
                             : in_month
-                              ? "text-gray-700"
-                              : "text-gray-400",
+                              ? "text-gray-700 dark:text-gray-300"
+                              : "text-gray-400 dark:text-gray-600",
                         ].join(" ")}
                       >
                         {day.getDate()}
                       </span>
                       {exams.length > 0 && (
                         <div className="mt-1 space-y-0.5">
-                          {exams.slice(0, 2).map((title, i) => (
-                            <div
-                              key={i}
-                              title={title}
-                              className="flex items-center gap-1 truncate text-[10px] font-medium text-brand-700"
+                          {exams.slice(0, 2).map((exam) => (
+                            <button
+                              key={exam.id}
+                              type="button"
+                              onClick={() => on_exam_click?.(exam.id)}
+                              title={`Open PDF — ${exam.title}`}
+                              className="flex w-full items-center gap-1 truncate text-left text-[10px] font-medium text-brand-700 hover:underline dark:text-brand-300"
                             >
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-                              <span className="truncate">{title}</span>
-                            </div>
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500 dark:bg-brand-400" />
+                              <span className="truncate">{exam.title}</span>
+                            </button>
                           ))}
                           {exams.length > 2 && (
-                            <span className="pl-2.5 text-[10px] text-gray-400">
+                            <span className="pl-2.5 text-[10px] text-gray-400 dark:text-gray-500">
                               +{exams.length - 2} more
                             </span>
                           )}
@@ -228,7 +236,7 @@ export function CalendarGrid({ data }: CalendarGridProps) {
                 {/* Medication range bars spanning exact active date boundaries */}
                 {lanes.length > 0 && (
                   <div
-                    className="col-span-7 relative bg-gray-50/60 border-t border-dashed border-gray-200"
+                    className="col-span-7 relative border-t border-dashed border-gray-200 bg-gray-50/60 dark:border-gray-800 dark:bg-gray-950/40"
                     style={{ height: lanes.length * lane_height + 8 }}
                   >
                     {lanes.map((lane, lane_index) =>
@@ -254,10 +262,10 @@ export function CalendarGrid({ data }: CalendarGridProps) {
           })}
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-500">
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-brand-500" />
-            Exam performed
+            Exam performed (click to open the PDF)
           </span>
           {data.medications.slice(0, 6).map((med, index) => (
             <span key={med.id} className="flex items-center gap-1.5">

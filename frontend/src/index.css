@@ -6,6 +6,10 @@
   color-scheme: light;
 }
 
+html.dark {
+  color-scheme: dark;
+}
+
 html,
 body,
 #root {
@@ -19,6 +23,11 @@ body {
   background-color: #f9fafb;
   color: #101828;
   -webkit-font-smoothing: antialiased;
+}
+
+html.dark body {
+  background-color: #030712;
+  color: #f3f4f6;
 }
 
 * {

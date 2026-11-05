@@ -23,7 +23,7 @@ export function Modal({ open, title, subtitle, onClose, children, footer }: Moda
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-gray-900/40 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-gray-900/40 p-4 backdrop-blur-sm sm:items-center dark:bg-black/70"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -31,17 +31,19 @@ export function Modal({ open, title, subtitle, onClose, children, footer }: Moda
       aria-modal="true"
       aria-label={title}
     >
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-untitled-lg sm:p-8">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-untitled-lg sm:p-8 dark:bg-gray-900 dark:shadow-none dark:ring-1 dark:ring-white/10">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-            {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>
+            {subtitle && (
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>
+            )}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
           >
             <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />

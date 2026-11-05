@@ -42,8 +42,11 @@ scripts/preview.sh      starts uvicorn (8000) + vite ($PORT) for the preview
 ## Commands
 
 ```bash
-# backend (needs GROQ_API_KEY for uploads)
-cd backend && python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# backend (needs GROQ_API_KEY for uploads); create the venv once:
+#   cd backend && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+# Always run the backend with the venv interpreter: the system `python3` may be
+# older than the dependencies allow (uvicorn, markitdown).
+cd backend && .venv/bin/python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # frontend
 npm --prefix frontend install
@@ -59,7 +62,8 @@ steps to CI.
 
 In the Freebuff workspace, do **not** start the dev server by hand. Use
 `freebuff-preview restart` / `status`; `sh scripts/preview.sh` binds both
-processes to `0.0.0.0` and reads `$PORT` for the frontend.
+processes to `0.0.0.0` and reads `$PORT` for the frontend. Backend auto-reload
+is on unless `RELOAD=0` is set, so it doubles as the one-command local launcher.
 
 ## Conventions that matter
 
@@ -100,8 +104,9 @@ processes to `0.0.0.0` and reads `$PORT` for the frontend.
   `tailwind.config.ts` brand palette). Reuse existing UI primitives and the
   Untitled-UI-ish spacing/shadow styles instead of inventing a new look. Do not
   remove the Tailwind directives, theme variables, or body styles.
-- **`vite.config.ts` has HMR disabled on purpose** and a dev proxy to 8000.
-  Leave it alone.
+- **`vite.config.ts`** has a dev proxy to 8000 and HMR enabled by default; set
+  `VITE_NO_HMR=1` when serving through a proxy that cannot upgrade the HMR
+  websocket. Leave the proxy targets alone.
 - **Use `git` and `gh` for GitHub work.** The former
   `scripts/git-askpass.sh`, `github_sync.py`, `push_history.py` and
   `sync_branches.py` were sandbox workarounds that pulled a token out of
@@ -131,9 +136,11 @@ app — they only exist inside CI runners.
 ## API map
 
 Public: `GET /health`, `GET /api/auth/config`, `POST /api/auth/google`.
-JWT: `GET /api/auth/me`; `POST /api/exams/upload` (multipart `file`, ≤ 25 MB);
-`GET /api/exams`; `GET /api/exams/search?q=`; `POST|GET /api/medications`,
-`DELETE /api/medications/{id}`; `GET /api/calendar`;
+JWT: `GET /api/auth/me`; `POST /api/exams/upload` (multipart `file` + optional
+`title`, ≤ 25 MB); `GET /api/exams`; `PATCH /api/exams/{id}` (rename);
+`GET /api/exams/{id}/pdf` (streams the stored PDF); `GET /api/exams/search?q=`;
+`POST|GET /api/medications`, `PATCH|DELETE /api/medications/{id}`;
+`GET /api/calendar`;
 `GET /api/analytics/time-series?specs=Glucose&specs=Hemoglobin&start_date=&end_date=`.
 Routes keep the `/api/` prefix so the Vite proxy and the hosting catch-all both
 work.
@@ -142,7 +149,7 @@ work.
 
 Before calling work done:
 
-1. `cd backend && python3 -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, user`.
+1. `cd backend && .venv/bin/python -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, user`.
 2. `npm --prefix frontend run typecheck` (and `build` when touching UI).
 3. Smoke the changed endpoints against a running backend. Use a throwaway DB
    (e.g. `DATABASE_URL=sqlite:////tmp/smoke.db`) so you never pollute `backend/health.db`.

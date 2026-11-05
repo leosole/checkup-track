@@ -9,7 +9,9 @@ const BASE =
   "block w-full rounded-lg border-0 px-3.5 py-2.5 text-sm text-gray-900 " +
   "shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 " +
   "focus:ring-2 focus:ring-inset focus:ring-brand-600 transition-shadow " +
-  "disabled:bg-gray-50 disabled:text-gray-500";
+  "disabled:bg-gray-50 disabled:text-gray-500 " +
+  "dark:bg-gray-900 dark:text-gray-100 dark:ring-gray-700 " +
+  "dark:placeholder:text-gray-500 dark:disabled:bg-gray-800";
 
 export function Input({
   label,
@@ -23,7 +25,10 @@ export function Input({
   return (
     <div className="space-y-1.5">
       {label && (
-        <label htmlFor={input_id} className="block text-sm font-medium text-gray-700">
+        <label
+          htmlFor={input_id}
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
           {label}
         </label>
       )}

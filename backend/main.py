@@ -6,12 +6,24 @@ sign-in/config routes require ``Authorization: Bearer <TOKEN>``.
 """
 
 import logging
+import re
 from datetime import date
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
+
+import object_storage
 
 from auth import (
     AuthConfigError,
@@ -30,6 +42,7 @@ from models import (
     CalendarResponse,
     Exam,
     ExamBiomarker,
+    ExamRename,
     ExamResponse,
     GoogleAuthRequest,
     GoogleConfigResponse,
@@ -37,6 +50,7 @@ from models import (
     Medication,
     MedicationCreate,
     MedicationResponse,
+    MedicationUpdate,
     TimeSeries,
     TimeSeriesPoint,
     TimeSeriesResponse,
@@ -157,9 +171,14 @@ def _exam_to_response(
 @app.post("/api/exams/upload", response_model=ExamResponse, tags=["exams"])
 async def upload_exam(
     file: UploadFile = File(...),
+    title: Optional[str] = Form(default=None),
     user: User = Depends(get_current_user),
 ) -> ExamResponse:
-    """Accept a PDF, parse it, extract structured biomarkers, and persist."""
+    """Accept a PDF, parse it, extract structured biomarkers, and persist.
+
+    ``title`` lets the user name the exam; blank means "use the report's own
+    title, then the PDF file name".
+    """
     filename = file.filename or "exam.pdf"
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -167,7 +186,7 @@ async def upload_exam(
     if len(pdf_bytes) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="PDF exceeds the 25 MB upload limit.")
     try:
-        return process_exam(pdf_bytes, filename, user.id)
+        return process_exam(pdf_bytes, filename, user.id, title)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 - surface parse failures as HTTP errors
@@ -187,6 +206,62 @@ def list_exams(
         select(Exam).where(Exam.user_id == user.id).order_by(Exam.date_performed.desc())
     ).all()
     return [_exam_to_response(session, exam) for exam in exams]
+
+
+@app.patch("/api/exams/{exam_id}", response_model=ExamResponse, tags=["exams"])
+def rename_exam(
+    exam_id: int,
+    payload: ExamRename,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ExamResponse:
+    """Rename an exam (a blank name is rejected; omit the call instead)."""
+    exam = session.get(Exam, exam_id)
+    if exam is None or exam.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    exam.title = payload.title.strip()
+    session.add(exam)
+    session.commit()
+    session.refresh(exam)
+    return _exam_to_response(session, exam)
+
+
+@app.get("/api/exams/{exam_id}/pdf", tags=["exams"])
+def download_exam_pdf(
+    exam_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Stream the stored PDF for one exam (B2 object or local fallback file)."""
+    exam = session.get(Exam, exam_id)
+    if exam is None or exam.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    try:
+        if exam.pdf_path.startswith("exams/"):
+            pdf_bytes = object_storage.download_pdf(exam.pdf_path)
+        else:
+            local_path = object_storage.local_pdf_path(exam.pdf_path)
+            if not local_path.is_file():
+                raise HTTPException(
+                    status_code=404,
+                    detail="The stored PDF is no longer available.",
+                )
+            pdf_bytes = local_path.read_bytes()
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 - storage failure is an upstream error
+        logger.exception("Could not read stored PDF %s", exam.pdf_path)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not read the stored PDF: {exc}",
+        ) from exc
+
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", exam.title).strip("._") or f"exam-{exam.id}"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{stem}.pdf"'},
+    )
 
 
 @app.get("/api/exams/search", response_model=List[ExamResponse], tags=["exams"])
@@ -256,6 +331,52 @@ def list_medications(
         )
         for m in meds
     ]
+
+
+@app.patch(
+    "/api/medications/{medication_id}",
+    response_model=MedicationResponse,
+    tags=["medications"],
+)
+def update_medication(
+    medication_id: int,
+    payload: MedicationUpdate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> MedicationResponse:
+    """Edit a medication in place; only the supplied fields change."""
+    med = session.get(Medication, medication_id)
+    if med is None or med.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Medication not found.")
+
+    provided = payload.model_fields_set
+    if "medication_name" in provided and payload.medication_name is not None:
+        med.name = payload.medication_name.strip()
+    if "dosage" in provided and payload.dosage is not None:
+        med.dosage = payload.dosage.strip()
+    if "frequency_per_day" in provided and payload.frequency_per_day is not None:
+        med.frequency_per_day = payload.frequency_per_day
+    if "start_date" in provided and payload.start_date is not None:
+        med.start_date = payload.start_date
+    if "end_date" in provided:
+        med.end_date = payload.end_date
+    if med.end_date is not None and med.end_date < med.start_date:
+        raise HTTPException(
+            status_code=422,
+            detail="end_date must be on or after start_date.",
+        )
+
+    session.add(med)
+    session.commit()
+    session.refresh(med)
+    return MedicationResponse(
+        id=med.id,
+        name=med.name,
+        dosage=med.dosage,
+        frequency_per_day=med.frequency_per_day,
+        start_date=med.start_date,
+        end_date=med.end_date,
+    )
 
 
 @app.delete("/api/medications/{medication_id}", tags=["medications"])

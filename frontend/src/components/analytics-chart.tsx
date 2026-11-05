@@ -72,6 +72,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
   const specs = useMemo(() => available_specs(exams), [exams]);
   const [selected, set_selected] = useState<string[]>([]);
   const [custom_spec, set_custom_spec] = useState("");
+  const [spec_filter, set_spec_filter] = useState("");
   const [series, set_series] = useState<TimeSeries[]>([]);
   const [loading, set_loading] = useState(false);
   const [error, set_error] = useState<string | null>(null);
@@ -128,6 +129,12 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
   }, [selected]);
 
   const visible = series.filter((s) => s.points.length > 0);
+
+  // Biomarker name filter for the chip picker (selection is unaffected).
+  const filter_lower = spec_filter.trim().toLowerCase();
+  const filtered_specs = filter_lower
+    ? specs.filter((spec) => spec.toLowerCase().includes(filter_lower))
+    : specs;
 
   const geometry = useMemo(() => {
     const inner_w = Math.max(80, width - PAD.left - PAD.right);
@@ -232,8 +239,10 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
     <Card className="p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Biomarker trends</h3>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+            Biomarker trends
+          </h3>
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
             Plot multiple lab values against each other over time
           </p>
         </div>
@@ -242,13 +251,55 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
 
       {/* Spec picker chips */}
       <div className="mt-4 space-y-3">
+        {specs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full max-w-xs">
+              <svg
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <input
+                type="search"
+                value={spec_filter}
+                onChange={(e) => set_spec_filter(e.target.value)}
+                placeholder="Filter biomarkers…"
+                aria-label="Filter biomarkers"
+                className="w-full rounded-lg border-0 bg-gray-100 py-2 pl-9 pr-3 text-sm text-gray-900 ring-1 ring-inset ring-transparent placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-brand-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:bg-gray-900"
+              />
+            </div>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {filtered_specs.length} of {specs.length} markers
+            </span>
+            {spec_filter && (
+              <button
+                type="button"
+                onClick={() => set_spec_filter("")}
+                className="text-xs font-medium text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
+              >
+                Clear filter
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {specs.length === 0 && (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-400 dark:text-gray-500">
               Upload a lab report PDF to populate biomarkers.
             </p>
           )}
-          {specs.map((spec) => {
+          {specs.length > 0 && filtered_specs.length === 0 && (
+            <p className="text-sm text-gray-400 dark:text-gray-500">
+              No biomarker matches “{spec_filter.trim()}”.
+            </p>
+          )}
+          {filtered_specs.map((spec) => {
             const active = selected.includes(spec);
             const idx = selected.indexOf(spec);
             return (
@@ -259,8 +310,8 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
                 className={[
                   "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors",
                   active
-                    ? "bg-brand-50 text-brand-700 ring-brand-300"
-                    : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50",
+                    ? "bg-brand-50 text-brand-700 ring-brand-300 dark:bg-brand-500/15 dark:text-brand-200 dark:ring-brand-500/40"
+                    : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-gray-800",
                 ].join(" ")}
               >
                 {active && (
@@ -283,7 +334,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
           />
           <button
             type="submit"
-            className="shrink-0 rounded-lg bg-gray-100 px-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200"
+            className="shrink-0 rounded-lg bg-gray-100 px-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
           >
             Add
           </button>
@@ -293,12 +344,12 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
       {/* Chart canvas */}
       <div ref={wrap_ref} className="relative mt-4">
         {loading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-gray-900/70">
             <Spinner className="h-6 w-6" />
           </div>
         )}
         {error && (
-          <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
             {error}
           </p>
         )}
@@ -340,7 +391,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
                     x2={width - PAD.right}
                     y1={geometry.y_of(tick)}
                     y2={geometry.y_of(tick)}
-                    stroke="#e5e7eb"
+                    className="stroke-gray-200 dark:stroke-gray-700"
                     strokeWidth={1}
                   />
                   <text
@@ -349,7 +400,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
                     textAnchor="end"
                     dominantBaseline="middle"
                     fontSize={11}
-                    fill="#6b7280"
+                    className="fill-gray-500 dark:fill-gray-400"
                   >
                     {tick}
                   </text>
@@ -364,7 +415,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
                   y={HEIGHT - PAD.bottom + 20}
                   textAnchor="middle"
                   fontSize={11}
-                  fill="#6b7280"
+                  className="fill-gray-500 dark:fill-gray-400"
                 >
                   {format_date(tick).replace(/, \d{4}$/, "")}
                 </text>
@@ -376,7 +427,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
                 x2={PAD.left}
                 y1={PAD.top}
                 y2={HEIGHT - PAD.bottom}
-                stroke="#d1d5db"
+                className="stroke-gray-300 dark:stroke-gray-700"
                 strokeWidth={1}
               />
               <line
@@ -384,7 +435,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
                 x2={width - PAD.right}
                 y1={HEIGHT - PAD.bottom}
                 y2={HEIGHT - PAD.bottom}
-                stroke="#d1d5db"
+                className="stroke-gray-300 dark:stroke-gray-700"
                 strokeWidth={1}
               />
 
@@ -464,7 +515,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
               {geometry.paths.map((path, idx) => (
                 <span
                   key={path.spec}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-gray-300"
                 >
                   <span
                     className="h-2.5 w-2.5 rounded-full"
@@ -472,7 +523,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
                   />
                   {path.spec}
                   {path.unit && (
-                    <span className="text-gray-400">({path.unit})</span>
+                    <span className="text-gray-400 dark:text-gray-500">({path.unit})</span>
                   )}
                 </span>
               ))}

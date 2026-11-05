@@ -164,9 +164,12 @@ export const api = {
     return request(`/api/exams/search?q=${encodeURIComponent(q)}`);
   },
 
-  async upload_exam(file: File): Promise<Exam> {
+  async upload_exam(file: File, title?: string): Promise<Exam> {
     const form = new FormData();
     form.append("file", file);
+    if (title && title.trim()) {
+      form.append("title", title.trim());
+    }
     const headers = new Headers();
     const token = get_token();
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -186,8 +189,37 @@ export const api = {
     return data as Exam;
   },
 
+  async exam_pdf(id: number): Promise<Blob> {
+    const headers = new Headers();
+    const token = get_token();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`/api/exams/${id}/pdf`, { headers });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new ApiError(res.status, detail || `Could not open the PDF (${res.status})`);
+    }
+    return res.blob();
+  },
+
+  rename_exam(id: number, title: string): Promise<Exam> {
+    return request(`/api/exams/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    });
+  },
+
   list_medications(): Promise<Medication[]> {
     return request("/api/medications");
+  },
+
+  update_medication(
+    id: number,
+    input: Partial<MedicationInput>,
+  ): Promise<Medication> {
+    return request(`/api/medications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   },
 
   create_medication(input: MedicationInput): Promise<Medication> {

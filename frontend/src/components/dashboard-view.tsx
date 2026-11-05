@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import {
   api,
   type CalendarData,
@@ -7,11 +14,19 @@ import {
 } from "../api-client";
 import { format_date } from "../date-utils";
 import { use_auth } from "../auth-context";
+import { apply_theme, init_theme, type Theme } from "../theme";
 import { AnalyticsChart } from "./analytics-chart";
 import { CalendarGrid } from "./calendar-grid";
 import { MedicationModal } from "./medication-modal";
 import { Badge, Card, EmptyState, Spinner } from "./ui/badge";
 import { Button } from "./ui/button";
+
+/** Small text field styling shared by the inline inputs in this view. */
+const FIELD =
+  "rounded-lg border-0 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm ring-1 " +
+  "ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset " +
+  "focus:ring-brand-600 dark:bg-gray-900 dark:text-gray-100 dark:ring-gray-700 " +
+  "dark:placeholder:text-gray-500";
 
 function StatCard({
   label,
@@ -34,12 +49,14 @@ function StatCard({
           : "bg-gray-400";
   return (
     <Card className="p-5">
-      <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+      <div className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400">
         <span className={`h-2 w-2 rounded-full ${dot}`} />
         {label}
       </div>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">{value}</p>
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
+        {value}
+      </p>
+      {hint && <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{hint}</p>}
     </Card>
   );
 }
@@ -60,8 +77,13 @@ export function DashboardView() {
   const [load_error, set_load_error] = useState<string | null>(null);
   const [uploading, set_uploading] = useState(false);
   const [upload_progress, set_upload_progress] = useState(0);
+  const [exam_name, set_exam_name] = useState("");
   const [notice, set_notice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [modal_open, set_modal_open] = useState(false);
+  const [editing_med, set_editing_med] = useState<Medication | null>(null);
+  const [renaming_id, set_renaming_id] = useState<number | null>(null);
+  const [rename_value, set_rename_value] = useState("");
+  const [theme, set_theme] = useState<Theme>(() => init_theme());
   const file_input_ref = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(async () => {
@@ -108,6 +130,32 @@ export function DashboardView() {
     return () => window.clearTimeout(timer);
   }, [search_query]);
 
+  function toggle_theme() {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    apply_theme(next);
+    set_theme(next);
+  }
+
+  async function open_exam_pdf(exam_id: number) {
+    try {
+      const blob = await api.exam_pdf(exam_id);
+      const url = URL.createObjectURL(blob);
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        set_notice({
+          kind: "err",
+          text: "The browser blocked the PDF tab. Allow pop-ups and retry.",
+        });
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      set_notice({
+        kind: "err",
+        text: err instanceof Error ? err.message : "Could not open the PDF.",
+      });
+    }
+  }
+
   async function handle_upload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -121,9 +169,10 @@ export function DashboardView() {
       const ticker = window.setInterval(() => {
         set_upload_progress((p) => (p < 90 ? p + 6 : p));
       }, 350);
-      const exam = await api.upload_exam(file);
+      const exam = await api.upload_exam(file, exam_name);
       window.clearInterval(ticker);
       set_upload_progress(100);
+      set_exam_name("");
       await refresh();
       if (exam.extraction_error) {
         set_notice({
@@ -147,6 +196,25 @@ export function DashboardView() {
     }
   }
 
+  async function submit_rename(e: FormEvent, exam: Exam) {
+    e.preventDefault();
+    const value = rename_value.trim();
+    if (!value || value === exam.title) {
+      set_renaming_id(null);
+      return;
+    }
+    try {
+      await api.rename_exam(exam.id, value);
+      set_renaming_id(null);
+      await refresh();
+    } catch (err) {
+      set_notice({
+        kind: "err",
+        text: err instanceof Error ? err.message : "Rename failed.",
+      });
+    }
+  }
+
   const displayed = search_query.trim() ? (search_results ?? []) : exams;
 
   const abnormal_count = exams.reduce(
@@ -158,9 +226,9 @@ export function DashboardView() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
@@ -169,14 +237,16 @@ export function DashboardView() {
               </svg>
             </span>
             <div className="leading-tight">
-              <p className="text-sm font-semibold text-gray-900">Vitals</p>
-              <p className="text-xs text-gray-500">Health dashboard</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                CheckUpTrack
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Health dashboard</p>
             </div>
           </div>
 
           <div className="relative ml-auto w-full max-w-md">
             <svg
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -192,7 +262,7 @@ export function DashboardView() {
               onChange={(e) => set_search_query(e.target.value)}
               placeholder="Search exams, biomarkers, ranges…"
               aria-label="Global search"
-              className="w-full rounded-lg border-0 bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-inset ring-transparent placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-brand-600"
+              className="w-full rounded-lg border-0 bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-inset ring-transparent placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-brand-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:bg-gray-900"
             />
             {searching && (
               <span className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -202,32 +272,47 @@ export function DashboardView() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="hidden sm:inline-flex"
-              onClick={() => set_modal_open(true)}
+            <button
+              type="button"
+              onClick={toggle_theme}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
             >
-              + Medication
-            </Button>
+              {theme === "dark" ? (
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15zM10 7a3 3 0 100 6 3 3 0 000-6zM15.657 5.404a.75.75 0 11-1.06-1.06l1.06-1.061a.75.75 0 011.06 1.06l-1.06 1.06zM4.343 14.596a.75.75 0 11-1.06 1.06l-1.06-1.06a.75.75 0 011.06-1.06l1.06 1.06zM18 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0118 10zM5 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 015 10zM15.657 14.596a.75.75 0 111.06 1.06l-1.06 1.06a.75.75 0 11-1.06-1.06l1.06-1.06zM4.343 5.404a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 11-1.06 1.061l-1.06-1.06z" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M7.455 2.004a.75.75 0 01.26.77 7 7 0 009.958 9.957.75.75 0 011.067.852A8.5 8.5 0 117.455 2.004z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              )}
+            </button>
             <div className="group relative">
               <button
                 type="button"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 ring-2 ring-transparent transition group-hover:ring-brand-300"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 ring-2 ring-transparent transition group-hover:ring-brand-300 dark:bg-brand-500/20 dark:text-brand-200 dark:group-hover:ring-brand-500/40"
                 aria-label="Account menu"
               >
                 {(user?.name || "?").charAt(0).toUpperCase()}
               </button>
               <div className="invisible absolute right-0 top-full z-40 w-56 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100">
-                <div className="rounded-xl bg-white p-3 shadow-untitled-lg ring-1 ring-gray-900/5">
-                  <p className="truncate text-sm font-semibold text-gray-900">
+                <div className="rounded-xl bg-white p-3 shadow-untitled-lg ring-1 ring-gray-900/5 dark:bg-gray-900 dark:shadow-none dark:ring-white/10">
+                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
                     {user?.name}
                   </p>
-                  <p className="truncate text-xs text-gray-500">{user?.email}</p>
+                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                    {user?.email}
+                  </p>
                   <button
                     type="button"
                     onClick={sign_out}
-                    className="mt-2 w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                    className="mt-2 w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
                   >
                     Sign out
                   </button>
@@ -248,19 +333,30 @@ export function DashboardView() {
             className="hidden"
             onChange={handle_upload}
           />
-          <Button
-            onClick={() => file_input_ref.current?.click()}
-            loading={uploading}
-          >
+          <input
+            type="text"
+            value={exam_name}
+            onChange={(e) => set_exam_name(e.target.value)}
+            placeholder="Exam name (optional)"
+            aria-label="Exam name for the next upload"
+            className={`${FIELD} w-56`}
+          />
+          <Button onClick={() => file_input_ref.current?.click()} loading={uploading}>
             {uploading ? `Parsing PDF… ${upload_progress}%` : "Upload lab report PDF"}
           </Button>
-          <Button variant="secondary" onClick={() => set_modal_open(true)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              set_editing_med(null);
+              set_modal_open(true);
+            }}
+          >
             + Add medication
           </Button>
           {uploading && (
-            <div className="h-2 w-40 overflow-hidden rounded-full bg-gray-200">
+            <div className="h-2 w-40 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
               <div
-                className="h-full rounded-full bg-brand-600 transition-all"
+                className="h-full rounded-full bg-brand-600 transition-all dark:bg-brand-500"
                 style={{ width: `${upload_progress}%` }}
               />
             </div>
@@ -270,8 +366,8 @@ export function DashboardView() {
               className={[
                 "rounded-lg px-3 py-1.5 text-sm",
                 notice.kind === "ok"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-rose-50 text-rose-700",
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                  : "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300",
               ].join(" ")}
             >
               {notice.text}
@@ -281,15 +377,19 @@ export function DashboardView() {
             <button
               type="button"
               onClick={() => set_search_query("")}
-              className="ml-auto text-sm font-medium text-brand-700 hover:text-brand-900"
+              className="ml-auto text-sm font-medium text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
             >
               Clear search ({displayed.length} result{displayed.length === 1 ? "" : "s"})
             </button>
           )}
         </div>
+        <p className="-mt-1 text-xs text-gray-400 dark:text-gray-500">
+          Leave the exam name empty to use the report&apos;s own title, falling back to the
+          PDF file name.
+        </p>
 
         {load_error && (
-          <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
             {load_error}
           </p>
         )}
@@ -319,7 +419,7 @@ export function DashboardView() {
         {/* Exam list */}
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
               {search_query.trim() ? "Search results" : "Recent exams"}
             </h2>
             {searching && <Spinner className="h-4 w-4" />}
@@ -343,15 +443,58 @@ export function DashboardView() {
               {displayed.map((exam) => (
                 <Card key={exam.id} className="p-5">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        {exam.title}
-                      </h3>
-                      <p className="mt-0.5 text-xs text-gray-500">
+                    <div className="min-w-0 flex-1">
+                      {renaming_id === exam.id ? (
+                        <form
+                          onSubmit={(e) => void submit_rename(e, exam)}
+                          className="flex items-center gap-2"
+                        >
+                          <input
+                            autoFocus
+                            value={rename_value}
+                            onChange={(e) => set_rename_value(e.target.value)}
+                            aria-label="New exam name"
+                            className={`${FIELD} py-1 text-sm`}
+                          />
+                          <Button type="submit" size="sm">
+                            Save
+                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => set_renaming_id(null)}
+                            className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <h3 className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                            {exam.title}
+                          </h3>
+                          <button
+                            type="button"
+                            aria-label={`Rename ${exam.title}`}
+                            title="Rename exam"
+                            onClick={() => {
+                              set_renaming_id(exam.id);
+                              set_rename_value(exam.title);
+                            }}
+                            className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                          >
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                         Performed {format_date(exam.date_performed)}
                       </p>
                     </div>
-                    <Badge tone={exam.biomarkers.some((b) => b.is_abnormal) ? "danger" : "success"}>
+                    <Badge
+                      tone={exam.biomarkers.some((b) => b.is_abnormal) ? "danger" : "success"}
+                    >
                       {exam.biomarkers.filter((b) => b.is_abnormal).length > 0
                         ? `${exam.biomarkers.filter((b) => b.is_abnormal).length} out of range`
                         : "All in range"}
@@ -360,7 +503,9 @@ export function DashboardView() {
 
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {exam.biomarkers.length === 0 && (
-                      <span className="text-xs text-gray-400">No biomarkers extracted.</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        No biomarkers extracted.
+                      </span>
                     )}
                     {exam.biomarkers.map((b) => (
                       <span
@@ -373,8 +518,8 @@ export function DashboardView() {
                         className={[
                           "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
                           b.is_abnormal
-                            ? "bg-rose-50 text-rose-700 ring-rose-200"
-                            : "bg-gray-50 text-gray-700 ring-gray-200",
+                            ? "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30"
+                            : "bg-gray-50 text-gray-700 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700",
                         ].join(" ")}
                       >
                         {b.biomarker_name}
@@ -390,10 +535,23 @@ export function DashboardView() {
                   </div>
 
                   {exam.extraction_error && (
-                    <p className="mt-3 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
+                    <p className="mt-3 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
                       {exam.extraction_error}
                     </p>
                   )}
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void open_exam_pdf(exam.id)}
+                    >
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M4 3a2 2 0 00-2 2v2.5a.75.75 0 001.5 0V5a.5.5 0 01.5-.5h3.25a.75.75 0 000-1.5H4zM16 3h-3.25a.75.75 0 000 1.5H16a.5.5 0 01.5.5v2.5a.75.75 0 001.5 0V5a2 2 0 00-2-2zM3.5 12.5a.75.75 0 00-1.5 0V15a2 2 0 002 2h3.25a.75.75 0 000-1.5H4a.5.5 0 01-.5-.5v-2.5zM17.5 12.5a.75.75 0 00-1.5 0V15a.5.5 0 01-.5.5h-3.25a.75.75 0 000 1.5H16a2 2 0 002-2v-2.5z" />
+                      </svg>
+                      Open PDF
+                    </Button>
+                  </div>
                 </Card>
               ))}
             </div>
@@ -402,7 +560,7 @@ export function DashboardView() {
 
         {/* Calendar */}
         <section>
-          <CalendarGrid data={calendar} />
+          <CalendarGrid data={calendar} on_exam_click={(id) => void open_exam_pdf(id)} />
         </section>
 
         {/* Chart */}
@@ -413,8 +571,17 @@ export function DashboardView() {
         {/* Medications list */}
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">Medications</h2>
-            <Button variant="secondary" size="sm" onClick={() => set_modal_open(true)}>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+              Medications
+            </h2>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                set_editing_med(null);
+                set_modal_open(true);
+              }}
+            >
               + Add
             </Button>
           </div>
@@ -428,40 +595,57 @@ export function DashboardView() {
               {medications.map((med) => (
                 <Card key={med.id} className="flex items-center justify-between p-4">
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">{med.name}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                      {med.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                       {med.dosage} · {med.frequency_per_day}×/day
                     </p>
-                    <p className="mt-1 text-xs text-gray-400">
+                    <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
                       {format_date(med.start_date)} →{" "}
                       {med.end_date ? format_date(med.end_date) : "ongoing"}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    aria-label={`Delete ${med.name}`}
-                    onClick={async () => {
-                      try {
-                        await api.delete_medication(med.id);
-                        await refresh();
-                      } catch (err) {
-                        set_notice({
-                          kind: "err",
-                          text:
-                            err instanceof Error ? err.message : "Delete failed.",
-                        });
-                      }
-                    }}
-                    className="rounded-lg p-2 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
-                  >
-                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path
-                        fillRule="evenodd"
-                        d="M8.75 1A2.75 2.75 0 006 3.75V4H3.75a.75.75 0 000 1.5h.616l.74 10.5A2.75 2.75 0 007.846 18.5h4.308a2.75 2.75 0 002.744-2.5l.74-10.5h.616a.75.75 0 000-1.5H14v-.25A2.75 2.75 0 0011.25 1h-2.5zM7.5 4v.25c0 .69.56 1.25 1.25 1.25h2.5c.69 0 1.25-.56 1.25-1.25V4h-5zm1.5 4.5a.75.75 0 011.5 0v5a.75.75 0 01-1.5 0v-5zm3.75-.75a.75.75 0 000 1.5v5a.75.75 0 001.5 0v-5a.75.75 0 00-1.5 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label={`Edit ${med.name}`}
+                      title="Edit medication"
+                      onClick={() => {
+                        set_editing_med(med);
+                        set_modal_open(true);
+                      }}
+                      className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${med.name}`}
+                      onClick={async () => {
+                        try {
+                          await api.delete_medication(med.id);
+                          await refresh();
+                        } catch (err) {
+                          set_notice({
+                            kind: "err",
+                            text: err instanceof Error ? err.message : "Delete failed.",
+                          });
+                        }
+                      }}
+                      className="rounded-lg p-2 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 dark:text-gray-500 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path
+                          fillRule="evenodd"
+                          d="M8.75 1A2.75 2.75 0 006 3.75V4H3.75a.75.75 0 000 1.5h.616l.74 10.5A2.75 2.75 0 007.846 18.5h4.308a2.75 2.75 0 002.744-2.5l.74-10.5h.616a.75.75 0 000-1.5H14v-.25A2.75 2.75 0 0011.25 1h-2.5zM7.5 4v.25c0 .69.56 1.25 1.25 1.25h2.5c.69 0 1.25-.56 1.25-1.25V4h-5zm1.5 4.5a.75.75 0 011.5 0v5a.75.75 0 01-1.5 0v-5zm3.75-.75a.75.75 0 000 1.5v5a.75.75 0 001.5 0v-5a.75.75 0 00-1.5 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </Card>
               ))}
             </div>
@@ -471,8 +655,12 @@ export function DashboardView() {
 
       <MedicationModal
         open={modal_open}
-        onClose={() => set_modal_open(false)}
-        on_created={() => void refresh()}
+        med={editing_med}
+        onClose={() => {
+          set_modal_open(false);
+          set_editing_med(null);
+        }}
+        on_saved={() => void refresh()}
       />
     </div>
   );

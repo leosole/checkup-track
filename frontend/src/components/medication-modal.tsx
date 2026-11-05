@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, type Medication } from "../api-client";
 import { Input } from "./ui/input";
 import { Modal } from "./ui/modal";
@@ -6,13 +6,20 @@ import { Button } from "./ui/button";
 
 interface MedicationModalProps {
   open: boolean;
+  /** Medication being edited; null means "create a new one". */
+  med?: Medication | null;
   onClose: () => void;
-  on_created: (med: Medication) => void;
+  on_saved: () => void;
 }
 
 const today_iso = () => new Date().toISOString().slice(0, 10);
 
-export function MedicationModal({ open, onClose, on_created }: MedicationModalProps) {
+export function MedicationModal({
+  open,
+  med = null,
+  onClose,
+  on_saved,
+}: MedicationModalProps) {
   const [name, set_name] = useState("");
   const [dosage, set_dosage] = useState("");
   const [frequency, set_frequency] = useState("1");
@@ -21,14 +28,18 @@ export function MedicationModal({ open, onClose, on_created }: MedicationModalPr
   const [saving, set_saving] = useState(false);
   const [error, set_error] = useState<string | null>(null);
 
-  function reset() {
-    set_name("");
-    set_dosage("");
-    set_frequency("1");
-    set_start_date(today_iso());
-    set_end_date("");
+  const editing = med !== null;
+
+  // Load the medication being edited (or reset to a blank form) on open.
+  useEffect(() => {
+    if (!open) return;
+    set_name(med?.name ?? "");
+    set_dosage(med?.dosage ?? "");
+    set_frequency(String(med?.frequency_per_day ?? 1));
+    set_start_date(med?.start_date ?? today_iso());
+    set_end_date(med?.end_date ?? "");
     set_error(null);
-  }
+  }, [open, med]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -44,15 +55,19 @@ export function MedicationModal({ open, onClose, on_created }: MedicationModalPr
     }
     set_saving(true);
     try {
-      const med = await api.create_medication({
+      const input = {
         medication_name: name.trim(),
         dosage: dosage.trim(),
         frequency_per_day: freq,
         start_date,
         end_date: end_date || null,
-      });
-      on_created(med);
-      reset();
+      };
+      if (med) {
+        await api.update_medication(med.id, input);
+      } else {
+        await api.create_medication(input);
+      }
+      on_saved();
       onClose();
     } catch (err) {
       set_error(err instanceof Error ? err.message : "Failed to save medication.");
@@ -64,8 +79,12 @@ export function MedicationModal({ open, onClose, on_created }: MedicationModalPr
   return (
     <Modal
       open={open}
-      title="Add medication"
-      subtitle="Track a regimen — it will appear as a spanning block on the calendar."
+      title={editing ? "Edit medication" : "Add medication"}
+      subtitle={
+        editing
+          ? "Changes apply to the calendar timeline as soon as you save."
+          : "Track a regimen — it will appear as a spanning block on the calendar."
+      }
       onClose={onClose}
       footer={
         <>
@@ -73,14 +92,14 @@ export function MedicationModal({ open, onClose, on_created }: MedicationModalPr
             Cancel
           </Button>
           <Button type="submit" form="medication-form" loading={saving}>
-            Save medication
+            {editing ? "Save changes" : "Save medication"}
           </Button>
         </>
       }
     >
       <form id="medication-form" onSubmit={submit} className="space-y-4">
         {error && (
-          <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
             {error}
           </p>
         )}
@@ -124,7 +143,7 @@ export function MedicationModal({ open, onClose, on_created }: MedicationModalPr
             onChange={(e) => set_end_date(e.target.value)}
           />
         </div>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Leave the end date empty for a permanent regimen.
         </p>
       </form>
