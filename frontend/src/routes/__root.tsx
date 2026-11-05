@@ -1,10 +1,15 @@
-import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
+import { createRootRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { use_auth } from "../auth-context";
 import { SignInView } from "../components/sign-in-view";
 import { Spinner } from "../components/ui/badge";
 
 function Root() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { user, loading } = use_auth();
+
+  if (pathname === "/privacy-policy" || pathname === "/terms-of-service") {
+    return <Outlet />;
+  }
 
   if (loading) {
     return (

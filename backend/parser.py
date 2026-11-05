@@ -14,7 +14,8 @@ import logging
 import re
 import tempfile
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -32,6 +33,8 @@ from models import (
     BiomarkerResponse,
     Exam,
     ExamBiomarker,
+    ExamProcessingJob,
+    ExamProcessingResponse,
     ExamResponse,
     LLMExamsExtractionSchema,
     LLMProvider,
@@ -86,6 +89,7 @@ ANTHROPIC_MODEL = "claude-haiku-5-5"
 JSON_FENCE_RE = re.compile(r"^```(?:json)?|```$", re.IGNORECASE | re.MULTILINE)
 
 ISO_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+DEFAULT_CHUNK_CHARS = 20_000
 
 SYSTEM_PROMPT = """You are a clinical laboratory report data-extraction engine.
 You will receive the full markdown text of a lab report PDF.
@@ -113,6 +117,91 @@ Rules:
 def _system_prompt() -> str:
     schema = json.dumps(LLMExamsExtractionSchema.model_json_schema(), indent=2)
     return SYSTEM_PROMPT.format(schema=schema)
+
+
+def _split_markdown(markdown: str, max_chars: int = DEFAULT_CHUNK_CHARS) -> List[str]:
+    if max_chars < 1:
+        raise ValueError("Chunk size must be positive.")
+
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", markdown) if block.strip()]
+    chunks: List[str] = []
+    current = ""
+
+    for block in blocks:
+        pieces = _split_oversized_block(block, max_chars)
+
+        for piece in pieces:
+            candidate = f"{current}\n\n{piece}" if current else piece
+            if len(candidate) <= max_chars:
+                current = candidate
+            else:
+                if current:
+                    chunks.append(current)
+                current = piece
+
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _split_oversized_block(block: str, max_chars: int) -> List[str]:
+    lines = block.splitlines() or [block]
+    pieces: List[str] = []
+    current = ""
+
+    for line in lines:
+        fragments: List[str] = []
+        remainder = line
+        while len(remainder) > max_chars:
+            split_at = remainder.rfind(" ", 0, max_chars + 1)
+            if split_at <= 0:
+                split_at = max_chars
+            fragments.append(remainder[:split_at].strip())
+            remainder = remainder[split_at:].strip()
+        fragments.append(remainder)
+
+        for fragment in fragments:
+            candidate = f"{current}\n{fragment}" if current else fragment
+            if len(candidate) <= max_chars:
+                current = candidate
+            else:
+                if current:
+                    pieces.append(current)
+                current = fragment
+
+    if current:
+        pieces.append(current)
+    return pieces
+
+
+def _merge_extractions(
+    extractions: List[LLMExamsExtractionSchema],
+) -> LLMExamsExtractionSchema:
+    title = next((item.title.strip() for item in extractions if item.title.strip()), "")
+    performed = next(
+        (item.date_performed for item in extractions if item.date_performed),
+        None,
+    )
+    biomarkers: List[ExamBiomarker] = []
+    seen = set()
+
+    for extraction in extractions:
+        for biomarker in extraction.biomarkers:
+            key = (
+                biomarker.biomarker_name.strip().casefold(),
+                biomarker.value,
+                (biomarker.unit or "").strip().casefold(),
+                (biomarker.reference_range or "").strip().casefold(),
+            )
+            if key not in seen:
+                seen.add(key)
+                biomarkers.append(biomarker)
+
+    return LLMExamsExtractionSchema(
+        title=title,
+        date_performed=performed,
+        biomarkers=biomarkers,
+    )
 
 
 def _save_raw_pdf(pdf_bytes: bytes, original_name: str) -> str:
@@ -182,7 +271,7 @@ def _fallback_date(markdown: str) -> date:
             return date.fromisoformat(match.group(1))
         except ValueError:
             pass
-    return datetime.utcnow().date()
+    return datetime.now(timezone.utc).date()
 
 
 def _strip_json_fences(content: str) -> str:
@@ -310,6 +399,36 @@ def _configured_provider_credentials(
     return providers, None
 
 
+class ProviderRateLimitError(Exception):
+    def __init__(self, retry_after_seconds: Optional[int]) -> None:
+        super().__init__("Configured providers are rate limited.")
+        self.retry_after_seconds = retry_after_seconds
+
+
+def _rate_limit_retry_after(exc: Exception) -> Optional[int]:
+    if getattr(exc, "status_code", None) != 429:
+        return None
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", {}) or getattr(exc, "headers", {})
+    retry_ms = headers.get("retry-after-ms") or headers.get("Retry-After-Ms")
+    try:
+        if retry_ms is not None:
+            return max(1, min(3600, int(float(retry_ms) / 1000)))
+        value = headers.get("retry-after") or headers.get("Retry-After")
+        if value is None:
+            return None
+        try:
+            seconds = float(value)
+        except (TypeError, ValueError):
+            retry_at = parsedate_to_datetime(str(value))
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            seconds = (retry_at - datetime.now(timezone.utc)).total_seconds()
+        return max(1, min(3600, int(seconds)))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _extract_structured(
     markdown: str,
     providers: List[Tuple[LLMProvider, str]],
@@ -319,10 +438,14 @@ def _extract_structured(
         return None, "No LLM provider is configured. Add an API key in Profile."
 
     failed_providers: List[str] = []
+    retry_delays: List[int] = []
     for provider, api_key in providers:
         try:
             return _extract_provider(provider, api_key, markdown), None
         except Exception as exc:  # noqa: BLE001 - try the next configured provider
+            retry_after = _rate_limit_retry_after(exc)
+            if getattr(exc, "status_code", None) == 429:
+                retry_delays.append(retry_after or 0)
             logger.warning(
                 "%s extraction failed (%s)",
                 provider.value,
@@ -330,13 +453,21 @@ def _extract_structured(
             )
             failed_providers.append(provider.value)
 
+    if retry_delays:
+        retry_after = min((delay for delay in retry_delays if delay > 0), default=None)
+        raise ProviderRateLimitError(retry_after)
+
     return None, (
         "Structured extraction failed for configured providers: "
         + ", ".join(failed_providers)
     )
 
 
-def _to_response(exam: Exam, biomarkers: List[ExamBiomarker]) -> ExamResponse:
+def _to_response(
+    exam: Exam,
+    biomarkers: List[ExamBiomarker],
+    job: Optional[ExamProcessingJob] = None,
+) -> ExamResponse:
     return ExamResponse(
         id=exam.id,
         title=exam.title,
@@ -354,7 +485,218 @@ def _to_response(exam: Exam, biomarkers: List[ExamBiomarker]) -> ExamResponse:
             )
             for b in biomarkers
         ],
+        extraction_error=job.error if job else None,
+        processing=(
+            ExamProcessingResponse(
+                status=job.status,
+                stage=job.stage,
+                completed_chunks=job.completed_chunks,
+                total_chunks=job.total_chunks,
+                retry_allowed=job.status == "failed",
+                updated_at=job.updated_at,
+            )
+            if job
+            else None
+        ),
     )
+
+
+def enqueue_exam(
+    pdf_bytes: bytes,
+    filename: str,
+    user_id: str,
+    title: Optional[str] = None,
+) -> ExamResponse:
+    """Store a valid PDF and create its durable extraction job without parsing it."""
+    if not pdf_bytes:
+        raise ValueError("The uploaded file is empty.")
+    if not pdf_bytes.lstrip()[:5].startswith(b"%PDF"):
+        raise ValueError("The uploaded file is not a valid PDF.")
+
+    pdf_ref = _save_raw_pdf(pdf_bytes, filename)
+    requested_title = (title or "").strip() or None
+    fallback_title = Path(filename).stem or "Untitled exam"
+    exam = Exam(
+        user_id=user_id,
+        title=requested_title or fallback_title,
+        date_performed=datetime.now(timezone.utc).date(),
+        pdf_path=pdf_ref,
+        markdown_path="",
+    )
+    job = ExamProcessingJob(requested_title=requested_title)
+
+    try:
+        with Session(engine) as session:
+            session.add(exam)
+            session.flush()
+            job.exam_id = exam.id
+            session.add(job)
+            session.commit()
+            session.refresh(exam)
+            session.refresh(job)
+            return _to_response(exam, [], job)
+    except Exception:
+        _discard_pdf(pdf_ref)
+        raise
+
+
+def _update_processing_job(exam_id: int, **values) -> None:
+    now = datetime.now(timezone.utc)
+    with Session(engine) as session:
+        job = session.get(ExamProcessingJob, exam_id)
+        if job is None:
+            return
+        for field, value in values.items():
+            setattr(job, field, value)
+        job.updated_at = now
+        job.lease_expires_at = (
+            now + timedelta(minutes=15) if job.status == "processing" else None
+        )
+        session.add(job)
+        session.commit()
+
+
+def process_exam_job(exam_id: int) -> None:
+    """Convert, extract, and persist one claimed exam job, checkpointing each chunk."""
+    stage = "converting"
+    try:
+        with Session(engine) as session:
+            exam = session.get(Exam, exam_id)
+            job = session.get(ExamProcessingJob, exam_id)
+            if exam is None or job is None:
+                return
+            pdf_ref = exam.pdf_path
+            user_id = exam.user_id
+
+        _update_processing_job(exam_id, status="processing", stage=stage, error=None)
+        pdf_bytes = _load_pdf_bytes(pdf_ref)
+        markdown_path = _convert_to_markdown(pdf_bytes, pdf_ref)
+        markdown = markdown_path.read_text(encoding="utf-8")
+        chunks = _split_markdown(markdown)
+        if not chunks:
+            raise ExamProcessingError("No readable text was found in the PDF. Please retry.")
+
+        markdown_ref = f"storage/markdowns/{markdown_path.name}"
+        with Session(engine) as session:
+            exam = session.get(Exam, exam_id)
+            job = session.get(ExamProcessingJob, exam_id)
+            if exam is None or job is None:
+                return
+            exam.markdown_path = markdown_ref
+            job.stage = "extracting"
+            job.total_chunks = len(chunks)
+            job.updated_at = datetime.now(timezone.utc)
+            job.lease_expires_at = job.updated_at + timedelta(minutes=15)
+            session.add_all([exam, job])
+            session.commit()
+            partial_json = job.partial_results_json
+            requested_title = job.requested_title
+
+        partial = json.loads(partial_json or "[]")
+        if not isinstance(partial, list):
+            partial = []
+        if len(partial) > len(chunks):
+            partial = []
+            _update_processing_job(
+                exam_id,
+                completed_chunks=0,
+                partial_results_json="[]",
+            )
+
+        providers, credential_error = _configured_provider_credentials(user_id)
+        if credential_error:
+            raise ExamProcessingError(credential_error)
+
+        for index in range(len(partial), len(chunks)):
+            stage = "extracting"
+            extraction, extraction_error = _extract_structured(chunks[index], providers)
+            if extraction is None:
+                raise ExamProcessingError(
+                    extraction_error or "Extraction failed. Check provider keys or token limits, then retry."
+                )
+            partial.append(extraction.model_dump(mode="json"))
+            _update_processing_job(
+                exam_id,
+                stage=stage,
+                completed_chunks=len(partial),
+                total_chunks=len(chunks),
+                partial_results_json=json.dumps(partial),
+            )
+
+        merged = _merge_extractions(
+            [LLMExamsExtractionSchema.model_validate(item) for item in partial]
+        )
+        with Session(engine) as session:
+            exam = session.get(Exam, exam_id)
+            job = session.get(ExamProcessingJob, exam_id)
+            if exam is None or job is None:
+                return
+            if not requested_title and merged.title:
+                exam.title = merged.title
+            exam.date_performed = merged.date_performed or _fallback_date(markdown)
+            existing = session.exec(
+                select(ExamBiomarker).where(ExamBiomarker.exam_id == exam_id)
+            ).all()
+            for biomarker in existing:
+                session.delete(biomarker)
+            for biomarker in merged.biomarkers:
+                if not (biomarker.biomarker_name or "").strip():
+                    continue
+                session.add(
+                    ExamBiomarker(
+                        exam_id=exam_id,
+                        biomarker_name=biomarker.biomarker_name.strip(),
+                        value=biomarker.value,
+                        unit=(biomarker.unit or "").strip(),
+                        reference_range=(biomarker.reference_range or "").strip() or None,
+                        is_abnormal=bool(biomarker.is_abnormal),
+                    )
+                )
+            job.status = "completed"
+            job.stage = "completed"
+            job.error = None
+            job.completed_chunks = len(chunks)
+            job.total_chunks = len(chunks)
+            job.lease_expires_at = None
+            job.updated_at = datetime.now(timezone.utc)
+            session.add_all([exam, job])
+            session.commit()
+    except ProviderRateLimitError as exc:
+        with Session(engine) as session:
+            job = session.get(ExamProcessingJob, exam_id)
+            attempts = job.attempts if job is not None else 1
+        delay = exc.retry_after_seconds or min(60 * (2 ** max(attempts - 1, 0)), 3600)
+        _update_processing_job(
+            exam_id,
+            status="queued",
+            stage="waiting_for_provider",
+            error=None,
+            next_attempt_at=datetime.now(timezone.utc) + timedelta(seconds=delay),
+        )
+    except ExamProcessingError as exc:
+        _update_processing_job(
+            exam_id,
+            status="failed",
+            stage="failed",
+            error=str(exc),
+        )
+    except Exception as exc:  # noqa: BLE001 - never expose provider internals or report data
+        logger.warning("Exam %s %s stage failed (%s)", exam_id, stage, type(exc).__name__)
+        message = (
+            "Could not read the PDF. Check that it contains selectable text, then retry."
+            if stage == "converting"
+            else "Extraction failed unexpectedly. Check provider settings or token limits, then retry."
+        )
+        _update_processing_job(
+            exam_id,
+            status="failed",
+            stage="failed",
+            error=message,
+        )
+
+
+class ExamProcessingError(Exception):
+    pass
 
 
 def process_exam(
@@ -461,6 +803,7 @@ def search_exams(user_id: str, query: str) -> List[ExamResponse]:
             all_biomarkers = session.exec(
                 select(ExamBiomarker).where(ExamBiomarker.exam_id == exam.id)
             ).all()
+            job = session.get(ExamProcessingJob, exam.id)
             title_hit = q in exam.title.lower() or q in exam.date_performed.isoformat().lower()
             matching = [
                 b
@@ -471,7 +814,7 @@ def search_exams(user_id: str, query: str) -> List[ExamResponse]:
                 or q in str(b.value).lower()
             ]
             if title_hit:
-                results.append(_to_response(exam, all_biomarkers))
+                results.append(_to_response(exam, all_biomarkers, job))
             elif matching:
-                results.append(_to_response(exam, matching))
+                results.append(_to_response(exam, matching, job))
         return results

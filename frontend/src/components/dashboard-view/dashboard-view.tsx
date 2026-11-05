@@ -35,6 +35,8 @@ export interface DashboardRouteContent {
     on_edit: (exam: Exam) => void;
     on_deleted: (id: number) => Promise<void>;
     on_upload: () => void;
+    on_retry_exam: (id: number) => void;
+    retrying_exam_id: number | null;
     uploading: boolean;
     upload_progress: number;
     notice: { kind: "ok" | "err"; text: string } | null;
@@ -76,6 +78,7 @@ export function DashboardLayout({
   const [load_error, set_load_error] = useState<string | null>(null);
   const [uploading, set_uploading] = useState(false);
   const [upload_progress, set_upload_progress] = useState(0);
+  const [retrying_exam_id, set_retrying_exam_id] = useState<number | null>(null);
   const [exam_name, set_exam_name] = useState("");
   const [notice, set_notice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [modal_open, set_modal_open] = useState(false);
@@ -106,6 +109,41 @@ export function DashboardLayout({
   useEffect(() => {
     if (route !== "/profile") void refresh();
   }, [refresh, route]);
+
+  const has_active_extractions = exams.some(
+    (exam) => exam.processing?.status === "queued" || exam.processing?.status === "processing",
+  );
+
+  useEffect(() => {
+    if (!has_active_extractions || route === "/profile") return;
+    let active = true;
+    const poll = () => {
+      void api.list_exams().then((updated) => {
+        if (active) {
+          set_exams(updated);
+          set_calendar((current) => ({
+            ...current,
+            exams: updated.map((exam) => ({
+              id: exam.id,
+              title: exam.title,
+              date: exam.date_performed,
+            })),
+          }));
+        }
+      }).catch(() => undefined);
+      const query = search_query.trim();
+      if (query) {
+        void api.search_exams(query).then((updated) => {
+          if (active) set_search_results(updated);
+        }).catch(() => undefined);
+      }
+    };
+    const interval = window.setInterval(poll, 4000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [has_active_extractions, route, search_query]);
 
   function navigate(next_route: DashboardRoute) {
     void router_navigate({ to: next_route });
@@ -253,27 +291,14 @@ export function DashboardLayout({
     e.target.value = "";
     if (!file) return;
     set_uploading(true);
-    set_upload_progress(10);
+    set_upload_progress(0);
     set_notice(null);
     try {
-      // Progress can't be observed with fetch, so simulate incremental progress
-      // while the parse+LLM pipeline runs server-side.
-      const ticker = window.setInterval(() => {
-        set_upload_progress((p) => (p < 90 ? p + 6 : p));
-      }, 350);
-      const exam = await api.upload_exam(file, exam_name);
-      window.clearInterval(ticker);
+      const exam = await api.upload_exam(file, exam_name, set_upload_progress);
       set_upload_progress(100);
       set_exam_name("");
       await refresh();
-      if (exam.extraction_error) {
-        set_manual_exam(exam);
-      } else {
-        set_notice({
-          kind: "ok",
-          text: `“${exam.title}” ingested — ${exam.biomarkers.length} biomarkers extracted.`,
-        });
-      }
+      set_notice({ kind: "ok", text: `“${exam.title}” uploaded. Extraction queued.` });
     } catch (err) {
       set_notice({
         kind: "err",
@@ -335,6 +360,22 @@ export function DashboardLayout({
     }
   }
 
+  async function retry_exam(id: number) {
+    set_retrying_exam_id(id);
+    try {
+      const updated = await api.retry_exam_extraction(id);
+      set_exams((current) => current.map((exam) => exam.id === id ? updated : exam));
+      set_search_results((current) => current?.map((exam) => exam.id === id ? updated : exam) ?? null);
+    } catch (err) {
+      set_notice({
+        kind: "err",
+        text: err instanceof Error ? err.message : "Could not retry extraction.",
+      });
+    } finally {
+      set_retrying_exam_id(null);
+    }
+  }
+
   const displayed = search_query.trim() ? (search_results ?? []) : exams.slice(0, 5);
 
   const abnormal_count = exams.reduce(
@@ -364,6 +405,7 @@ export function DashboardLayout({
       active_meds,
       renaming_id,
       rename_value,
+      retrying_exam_id,
     },
     overview_actions: {
       on_upload: () => file_input_ref.current?.click(),
@@ -384,6 +426,7 @@ export function DashboardLayout({
       },
       on_rename_value_change: set_rename_value,
       on_delete_exam: delete_exam,
+      on_retry_exam: (id) => void retry_exam(id),
       on_open_exam_pdf: (id) => void open_exam_pdf(id),
       on_edit_medication: (medication) => {
         set_editing_med(medication);
@@ -416,6 +459,8 @@ export function DashboardLayout({
         await refresh();
       },
       on_upload: () => file_input_ref.current?.click(),
+      on_retry_exam: (id) => void retry_exam(id),
+      retrying_exam_id,
       uploading,
       upload_progress,
       notice,

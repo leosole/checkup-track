@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { use_auth } from "../auth-context";
 import { Spinner } from "./ui/badge";
+import { Logo } from "./logo";
 
 /** Untitled UI-styled "Sign in with Google" screen. */
 export function SignInView() {
@@ -76,19 +77,7 @@ export function SignInView() {
       <div className="w-full max-w-md">
         <div className="rounded-2xl bg-white p-8 shadow-untitled-lg ring-1 ring-gray-900/5 dark:bg-gray-900 dark:shadow-none dark:ring-white/10">
           <div className="flex flex-col items-center text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-sm">
-              <svg
-                className="h-6 w-6"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 12h4l2-6 4 12 2-6h6" />
-              </svg>
-            </span>
+            <Logo className="h-12 w-12 rounded-2xl shadow-sm" />
             <h1 className="mt-5 text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
               Welcome to CheckUpTrack
             </h1>

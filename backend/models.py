@@ -1,8 +1,8 @@
 """Database models (SQLModel tables) and API/LLM schemas (Pydantic)."""
 
-from datetime import date
+from datetime import date, datetime, timezone
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field as PydanticField, field_validator
 from sqlmodel import Field, SQLModel
@@ -33,6 +33,21 @@ class Exam(SQLModel, table=True):
     date_performed: date
     pdf_path: str
     markdown_path: str
+
+
+class ExamProcessingJob(SQLModel, table=True):
+    exam_id: int = Field(foreign_key="exam.id", primary_key=True)
+    status: str = Field(default="queued", index=True)
+    stage: str = Field(default="queued")
+    completed_chunks: int = Field(default=0)
+    total_chunks: int = Field(default=0)
+    partial_results_json: str = Field(default="[]")
+    error: Optional[str] = None
+    requested_title: Optional[str] = None
+    attempts: int = Field(default=0)
+    next_attempt_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    lease_expires_at: Optional[datetime] = None
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ExamBiomarker(SQLModel, table=True):
@@ -145,6 +160,16 @@ class ExamResponse(BaseModel):
     markdown_path: str
     biomarkers: List[BiomarkerResponse] = []
     extraction_error: Optional[str] = None
+    processing: Optional["ExamProcessingResponse"] = None
+
+
+class ExamProcessingResponse(BaseModel):
+    status: Literal["queued", "processing", "completed", "failed"]
+    stage: str
+    completed_chunks: int
+    total_chunks: int
+    retry_allowed: bool
+    updated_at: datetime
 
 
 class MedicationCreate(BaseModel):

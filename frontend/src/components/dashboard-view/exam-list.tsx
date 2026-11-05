@@ -21,6 +21,8 @@ interface DashboardExamListProps {
   on_start_rename: (exam: Exam) => void;
   on_rename_value_change: (value: string) => void;
   on_delete_exam: (exam: Exam) => void;
+  on_retry_exam: (id: number) => void;
+  retrying_exam_id: number | null;
   on_open_exam_pdf: (id: number) => void;
 }
 
@@ -39,6 +41,8 @@ export function DashboardExamList({
   on_start_rename,
   on_rename_value_change,
   on_delete_exam,
+  on_retry_exam,
+  retrying_exam_id,
   on_open_exam_pdf,
 }: DashboardExamListProps) {
   return (
@@ -76,7 +80,22 @@ export function DashboardExamList({
         />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {displayed.map((exam) => (
+          {displayed.map((exam) => {
+            const processing = exam.processing;
+            const status_label = !processing || processing.status === "completed"
+              ? null
+              : processing.stage === "waiting_for_provider"
+                ? "Waiting for provider limit"
+              : processing.status === "queued"
+                ? "Extraction queued"
+                : processing.status === "failed"
+                  ? "Extraction failed"
+                  : processing.stage === "converting"
+                    ? "Reading PDF"
+                    : processing.total_chunks > 0
+                      ? `Extracting · ${processing.completed_chunks} of ${processing.total_chunks} chunks`
+                      : "Preparing extraction";
+            return (
             <Card key={exam.id} className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -141,21 +160,32 @@ export function DashboardExamList({
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       Performed {format_date(exam.date_performed)}
                     </p>
-                    <Badge
-                      tone={exam.biomarkers.some((biomarker) => biomarker.is_abnormal) ? "danger" : "success"}
-                    >
-                      {exam.biomarkers.filter((biomarker) => biomarker.is_abnormal).length > 0
-                        ? `${exam.biomarkers.filter((biomarker) => biomarker.is_abnormal).length} out of range`
-                        : "All in range"}
-                    </Badge>
+                    {status_label ? (
+                      <Badge tone={processing?.status === "failed" ? "warning" : "info"}>
+                        {status_label}
+                      </Badge>
+                    ) : (
+                      <Badge
+                        tone={exam.biomarkers.some((biomarker) => biomarker.is_abnormal) ? "danger" : "success"}
+                      >
+                        {exam.biomarkers.filter((biomarker) => biomarker.is_abnormal).length > 0
+                          ? `${exam.biomarkers.filter((biomarker) => biomarker.is_abnormal).length} out of range`
+                          : "All in range"}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {exam.biomarkers.length === 0 && (
+                {exam.biomarkers.length === 0 && processing?.status !== "queued" && processing?.status !== "processing" && (
                   <span className="text-xs text-gray-400 dark:text-gray-500">
                     No biomarkers extracted.
+                  </span>
+                )}
+                {exam.biomarkers.length === 0 && (processing?.status === "queued" || processing?.status === "processing") && (
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    Results will appear here when extraction finishes.
                   </span>
                 )}
                 {exam.biomarkers.map((biomarker) => (
@@ -201,9 +231,20 @@ export function DashboardExamList({
                   </svg>
                   Open PDF
                 </Button>
+                {processing?.retry_allowed && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={retrying_exam_id === exam.id}
+                    onClick={() => on_retry_exam(exam.id)}
+                  >
+                    Retry extraction
+                  </Button>
+                )}
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>

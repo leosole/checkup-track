@@ -15,6 +15,8 @@ export function ExamsView({
   on_edit,
   on_deleted,
   on_upload,
+  on_retry_exam,
+  retrying_exam_id,
   uploading,
   upload_progress,
   notice,
@@ -26,6 +28,8 @@ export function ExamsView({
   on_edit: (exam: Exam) => void;
   on_deleted: (id: number) => Promise<void>;
   on_upload: () => void;
+  on_retry_exam: (id: number) => void;
+  retrying_exam_id: number | null;
   uploading: boolean;
   upload_progress: number;
   notice: { kind: "ok" | "err"; text: string } | null;
@@ -42,6 +46,8 @@ export function ExamsView({
   const visible_exams = exams
     .filter((exam) => {
       const has_abnormal = exam.biomarkers.some((biomarker) => biomarker.is_abnormal);
+      const has_extracted_results =
+        !exam.processing || exam.processing.status === "completed";
       const matches_query =
         !normalized_query ||
         exam.title.toLowerCase().includes(normalized_query) ||
@@ -50,7 +56,7 @@ export function ExamsView({
         );
       return (
         matches_query &&
-        (status === "all" || (status === "abnormal") === has_abnormal) &&
+        (status === "all" || (has_extracted_results && (status === "abnormal") === has_abnormal)) &&
         (!start_date || exam.date_performed >= start_date) &&
         (!end_date || exam.date_performed <= end_date)
       );
@@ -107,7 +113,7 @@ export function ExamsView({
           </div>
         </div>
         <Button onClick={on_upload} loading={uploading}>
-          {uploading ? `Parsing PDF… ${upload_progress}%` : "Add exam"}
+          {uploading ? `Uploading PDF… ${upload_progress}%` : "Add exam"}
         </Button>
       </div>
 
@@ -221,6 +227,18 @@ export function ExamsView({
                 const abnormal_count = exam.biomarkers.filter(
                   (biomarker) => biomarker.is_abnormal,
                 ).length;
+                const processing = exam.processing;
+                const status_label = !processing || processing.status === "completed"
+                  ? null
+                  : processing.stage === "waiting_for_provider"
+                    ? "Waiting for provider limit"
+                  : processing.status === "queued"
+                    ? "Extraction queued"
+                    : processing.status === "failed"
+                      ? "Extraction failed"
+                      : processing.stage === "converting"
+                        ? "Reading PDF"
+                        : `Extracting ${processing.completed_chunks} of ${processing.total_chunks} chunks`;
                 return (
                   <tr key={exam.id} className="text-sm">
                     <th
@@ -240,11 +258,24 @@ export function ExamsView({
                       {format_date(exam.date_performed)}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge tone={abnormal_count ? "danger" : "success"}>
-                        {abnormal_count
-                          ? `${abnormal_count} out of range`
-                          : "All in range"}
-                      </Badge>
+                      {status_label ? (
+                        <div className="space-y-1">
+                          <Badge tone={processing?.status === "failed" ? "warning" : "info"}>
+                            {status_label}
+                          </Badge>
+                          {exam.extraction_error && (
+                            <p className="max-w-xs text-xs text-amber-700 dark:text-amber-300">
+                              {exam.extraction_error}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge tone={abnormal_count ? "danger" : "success"}>
+                          {abnormal_count
+                            ? `${abnormal_count} out of range`
+                            : "All in range"}
+                        </Badge>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
@@ -255,6 +286,16 @@ export function ExamsView({
                         >
                           Open PDF
                         </Button>
+                        {processing?.retry_allowed && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={retrying_exam_id === exam.id}
+                            onClick={() => on_retry_exam(exam.id)}
+                          >
+                            Retry
+                          </Button>
+                        )}
                         <button
                           type="button"
                           aria-label={`Edit ${exam.title}`}

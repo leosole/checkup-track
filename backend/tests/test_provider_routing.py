@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import call, patch
 
 import parser
@@ -38,6 +39,20 @@ class ProviderRoutingTests(unittest.TestCase):
 
         self.assertIsNone(extraction)
         self.assertIn("Profile", error)
+
+    def test_all_rate_limited_providers_defer_with_retry_after(self) -> None:
+        error = RuntimeError("too many requests")
+        error.status_code = 429
+        error.response = SimpleNamespace(headers={"retry-after": "37"})
+
+        with patch("parser._extract_provider", side_effect=error):
+            with self.assertRaises(parser.ProviderRateLimitError) as raised:
+                parser._extract_structured(
+                    "report text",
+                    [(LLMProvider.OPENAI, "first-provider-secret")],
+                )
+
+        self.assertEqual(raised.exception.retry_after_seconds, 37)
 
 
 if __name__ == "__main__":

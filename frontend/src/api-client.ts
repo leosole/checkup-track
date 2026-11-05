@@ -47,6 +47,16 @@ export interface Exam {
   markdown_path: string;
   biomarkers: Biomarker[];
   extraction_error: string | null;
+  processing: ExamProcessing | null;
+}
+
+export interface ExamProcessing {
+  status: "queued" | "processing" | "completed" | "failed";
+  stage: string;
+  completed_chunks: number;
+  total_chunks: number;
+  retry_allowed: boolean;
+  updated_at: string;
 }
 
 export interface ManualBiomarkerInput {
@@ -220,29 +230,51 @@ export const api = {
     return request(`/api/exams/search?q=${encodeURIComponent(q)}`);
   },
 
-  async upload_exam(file: File, title?: string): Promise<Exam> {
+  async upload_exam(
+    file: File,
+    title?: string,
+    on_progress?: (percent: number) => void,
+  ): Promise<Exam> {
     const form = new FormData();
     form.append("file", file);
     if (title && title.trim()) {
       form.append("title", title.trim());
     }
-    const headers = new Headers();
     const token = get_token();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    const res = await fetch("/api/exams/upload", {
-      method: "POST",
-      headers,
-      body: form,
+    return new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("POST", "/api/exams/upload");
+      if (token) request.setRequestHeader("Authorization", `Bearer ${token}`);
+      request.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          on_progress?.(Math.round((event.loaded / event.total) * 100));
+        }
+      };
+      request.onerror = () => reject(new ApiError(0, "Upload connection failed."));
+      request.onabort = () => reject(new ApiError(0, "Upload was cancelled."));
+      request.onload = () => {
+        let data: unknown = null;
+        try {
+          data = JSON.parse(request.responseText);
+        } catch {
+          data = null;
+        }
+        if (request.status < 200 || request.status >= 300) {
+          const detail =
+            data && typeof data === "object" && "detail" in data
+              ? String((data as { detail: unknown }).detail)
+              : `Upload failed (${request.status})`;
+          reject(new ApiError(request.status, detail));
+          return;
+        }
+        resolve(data as Exam);
+      };
+      request.send(form);
     });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      const detail =
-        data && typeof data === "object" && "detail" in data
-          ? String((data as { detail: unknown }).detail)
-          : `Upload failed (${res.status})`;
-      throw new ApiError(res.status, detail);
-    }
-    return data as Exam;
+  },
+
+  retry_exam_extraction(id: number): Promise<Exam> {
+    return request(`/api/exams/${id}/retry`, { method: "POST" });
   },
 
   async exam_pdf(id: number): Promise<Blob> {

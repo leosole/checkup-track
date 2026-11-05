@@ -3,6 +3,7 @@ import type { Theme } from "../../theme";
 import { TbMoonFilled, TbSunLowFilled } from "react-icons/tb";
 import type { DashboardRoute } from "./types";
 import { Spinner } from "../ui/badge";
+import { Logo } from "../logo";
 
 interface DashboardHeaderProps {
   user: User | null;
@@ -36,11 +37,7 @@ export function DashboardHeader({
           onClick={() => on_navigate("/")}
           className="flex shrink-0 items-center gap-2.5 text-left"
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12h4l2-6 4 12 2-6h6" />
-            </svg>
-          </span>
+          <Logo className="h-9 w-9 shrink-0 rounded-xl shadow-sm" />
           <div className="leading-tight">
             <p className="text-sm font-semibold text-gray-900 dark:text-white">
               CheckUpTrack

@@ -8,7 +8,7 @@ sign-in/config routes require ``Authorization: Bearer <TOKEN>``.
 import logging
 import os
 import re
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -38,6 +38,7 @@ from auth import (
 )
 from credentials import encrypt_api_key
 from database import MARKDOWN_DIR, get_session, init_db
+from job_worker import notify_worker, start_worker, stop_worker
 from models import (
     AuthResponse,
     BiomarkerResponse,
@@ -46,6 +47,7 @@ from models import (
     CalendarResponse,
     Exam,
     ExamBiomarker,
+    ExamProcessingJob,
     ExamRename,
     ExamResponse,
     GoogleAuthRequest,
@@ -67,7 +69,7 @@ from models import (
     UserProviderCredential,
     UserResponse,
 )
-from parser import process_exam, search_exams
+from parser import enqueue_exam, search_exams
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
@@ -94,6 +96,12 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    start_worker()
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    stop_worker()
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +301,7 @@ def _exam_to_response(
         biomarkers = session.exec(
             select(ExamBiomarker).where(ExamBiomarker.exam_id == exam.id)
         ).all()
+    job = session.get(ExamProcessingJob, exam.id)
     return ExamResponse(
         id=exam.id,
         title=exam.title,
@@ -310,16 +319,34 @@ def _exam_to_response(
             )
             for b in biomarkers
         ],
+        extraction_error=job.error if job else None,
+        processing=(
+            {
+                "status": job.status,
+                "stage": job.stage,
+                "completed_chunks": job.completed_chunks,
+                "total_chunks": job.total_chunks,
+                "retry_allowed": job.status == "failed",
+                "updated_at": job.updated_at,
+            }
+            if job
+            else None
+        ),
     )
 
 
-@app.post("/api/exams/upload", response_model=ExamResponse, tags=["exams"])
+@app.post(
+    "/api/exams/upload",
+    response_model=ExamResponse,
+    status_code=202,
+    tags=["exams"],
+)
 async def upload_exam(
     file: UploadFile = File(...),
     title: Optional[str] = Form(default=None),
     user: User = Depends(get_current_user),
 ) -> ExamResponse:
-    """Accept a PDF, parse it, extract structured biomarkers, and persist.
+    """Accept and persist a PDF, then enqueue background extraction.
 
     ``title`` lets the user name the exam; blank means "use the report's own
     title, then the PDF file name".
@@ -331,15 +358,46 @@ async def upload_exam(
     if len(pdf_bytes) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="PDF exceeds the 25 MB upload limit.")
     try:
-        return process_exam(pdf_bytes, filename, user.id, title)
+        exam = enqueue_exam(pdf_bytes, filename, user.id, title)
+        notify_worker()
+        return exam
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 - surface parse failures as HTTP errors
         logger.exception("Exam processing failed")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process the PDF: {exc}",
+            detail="Failed to queue the PDF for processing.",
         ) from exc
+
+
+@app.post("/api/exams/{exam_id}/retry", response_model=ExamResponse, tags=["exams"])
+def retry_exam_extraction(
+    exam_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ExamResponse:
+    exam = session.get(Exam, exam_id)
+    if exam is None or exam.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    job = session.get(ExamProcessingJob, exam_id)
+    if job is None:
+        raise HTTPException(status_code=409, detail="This exam has no extraction job.")
+    if job.status != "failed":
+        raise HTTPException(status_code=409, detail="Only failed extraction jobs can be retried.")
+
+    job.status = "queued"
+    job.stage = "queued"
+    job.error = None
+    job.next_attempt_at = datetime.now(timezone.utc)
+    job.lease_expires_at = None
+    job.updated_at = datetime.now(timezone.utc)
+    session.add(job)
+    session.commit()
+    session.refresh(exam)
+    session.refresh(job)
+    notify_worker()
+    return _exam_to_response(session, exam)
 
 
 @app.get("/api/exams", response_model=List[ExamResponse], tags=["exams"])
@@ -432,6 +490,9 @@ def delete_exam(
     biomarkers = session.exec(
         select(ExamBiomarker).where(ExamBiomarker.exam_id == exam_id)
     ).all()
+    job = session.get(ExamProcessingJob, exam_id)
+    if job is not None:
+        session.delete(job)
     for biomarker in biomarkers:
         session.delete(biomarker)
     session.delete(exam)

@@ -31,6 +31,7 @@ export interface DashboardOverviewData {
   active_meds: number;
   renaming_id: number | null;
   rename_value: string;
+  retrying_exam_id: number | null;
 }
 
 export interface DashboardOverviewActions {
@@ -46,6 +47,7 @@ export interface DashboardOverviewActions {
   on_start_rename: (exam: Exam) => void;
   on_rename_value_change: (value: string) => void;
   on_delete_exam: (exam: Exam) => void;
+  on_retry_exam: (id: number) => void;
   on_open_exam_pdf: (id: number) => void;
   on_edit_medication: (medication: Medication) => void;
   on_delete_medication: (medication: Medication) => void;
@@ -109,6 +111,7 @@ export function DashboardOverview({
     active_meds,
     renaming_id,
     rename_value,
+    retrying_exam_id,
   } = data;
   const {
     on_upload,
@@ -123,6 +126,7 @@ export function DashboardOverview({
     on_start_rename,
     on_rename_value_change,
     on_delete_exam,
+    on_retry_exam,
     on_open_exam_pdf,
     on_edit_medication,
     on_delete_medication,
@@ -142,7 +146,7 @@ export function DashboardOverview({
           className={`${DASHBOARD_FIELD} w-56`}
         />
         <Button onClick={on_upload} loading={uploading}>
-          {uploading ? `Parsing PDF… ${upload_progress}%` : "Upload lab report PDF"}
+          {uploading ? `Uploading PDF… ${upload_progress}%` : "Upload lab report PDF"}
         </Button>
         <Button variant="secondary" onClick={on_add_medication}>
           + Add medication
@@ -216,6 +220,8 @@ export function DashboardOverview({
         on_start_rename={on_start_rename}
         on_rename_value_change={on_rename_value_change}
         on_delete_exam={on_delete_exam}
+        on_retry_exam={on_retry_exam}
+        retrying_exam_id={retrying_exam_id}
         on_open_exam_pdf={on_open_exam_pdf}
       />
 
