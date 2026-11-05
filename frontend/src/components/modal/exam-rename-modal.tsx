@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Exam } from "../api-client";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Modal } from "./ui/modal";
+import { api, type Exam } from "../../api-client";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Modal } from "../ui/modal";
 
 export function ExamRenameModal({
   exam,

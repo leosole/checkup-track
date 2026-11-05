@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Medication } from "../api-client";
-import { Input } from "./ui/input";
-import { Modal } from "./ui/modal";
-import { Button } from "./ui/button";
+import { api, type Medication } from "../../api-client";
+import { Input } from "../ui/input";
+import { Modal } from "../ui/modal";
+import { Button } from "../ui/button";
 
 interface MedicationModalProps {
   open: boolean;

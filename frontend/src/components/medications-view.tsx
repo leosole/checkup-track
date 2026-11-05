@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api, type Medication } from "../api-client";
 import { format_date } from "../date-utils";
-import { MedicationModal } from "./medication-modal";
+import { MedicationModal } from "./modal/medication-modal";
 import { Badge, EmptyState } from "./ui/badge";
 import { Button } from "./ui/button";
 

@@ -1,8 +1,8 @@
-import type { Exam, Medication } from "../api-client";
-import { format_date } from "../date-utils";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Modal } from "./ui/modal";
+import type { Exam, Medication } from "../../api-client";
+import { format_date } from "../../date-utils";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Modal } from "../ui/modal";
 
 export type CalendarSelection =
   | { kind: "exam"; exam: Exam }

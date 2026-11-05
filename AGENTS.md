@@ -91,8 +91,9 @@ network-heavy steps to CI.
   the app then issues its own HS256 JWT. Protected routes use
   `Depends(get_current_user)`. Frontend stores the token and sends
   `Authorization: Bearer …`. Never move verification to the client.
-- **Frontend has no router.** `app.tsx` switches on auth state. Don't add a
-  routing library for one screen.
+- **Frontend routing** uses TanStack Router file-based routing. Add page routes
+  under `frontend/src/routes/`; the auth gate lives in `__root.tsx`. Keep router
+  construction in `frontend/src/router.tsx` and avoid manual History API use.
 - **The localStorage token key is still `vitals.jwt`**, a leftover from the
   project's earlier names. Renaming it signs every existing user out; do it
   deliberately or not at all.
