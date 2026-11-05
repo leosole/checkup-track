@@ -24,6 +24,10 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import Headers
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import FileResponse
+from starlette.types import Scope
 from sqlmodel import Session, select
 
 import object_storage
@@ -76,6 +80,24 @@ logger = logging.getLogger("api")
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
 DEFAULT_PROVIDER_ORDER = tuple(provider.value for provider in LLMProvider)
+
+
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            accepts_html = "text/html" in Headers(scope=scope).get("accept", "")
+            is_api_path = path == "api" or path.startswith("api/")
+            if (
+                exc.status_code != 404
+                or is_api_path
+                or Path(path).suffix
+                or not accepts_html
+            ):
+                raise
+            return FileResponse(Path(self.all_directories[0]) / "index.html")
+
 
 app = FastAPI(
     title="Health Dashboard API",
@@ -778,7 +800,7 @@ if os.environ.get("SERVE_STATIC", "").strip() == "1":
         # Mounted last so /health, /api/* and /openapi.json keep precedence.
         app.mount(
             "/",
-            StaticFiles(directory=str(FRONTEND_DIST), html=True),
+            SPAStaticFiles(directory=str(FRONTEND_DIST), html=True),
             name="spa",
         )
         logger.info("Serving the built SPA from %s", FRONTEND_DIST)
