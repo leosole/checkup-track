@@ -1,6 +1,6 @@
 #!/bin/sh
-# Preview launcher: starts the FastAPI backend and the Vite dev server.
-# Freebuff injects PORT for the frontend; backend stays on 8000 (internal).
+# Local preview launcher: starts the FastAPI backend and the Vite dev server.
+# PORT optionally sets the frontend port; the backend stays on 8000.
 # Backend auto-reload is on by default; set RELOAD=0 to disable it.
 set -e
 

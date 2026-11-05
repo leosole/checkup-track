@@ -1,4 +1,4 @@
 # Dev/CI and local backend dependencies. The canonical list lives in
-# api/requirements.txt because Freebuff's Python hosting installs that file
+# api/requirements.txt because the hosted ASGI deployment installs that file
 # directly for production; keeping one list avoids drift.
 -r ../api/requirements.txt

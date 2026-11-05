@@ -1,10 +1,11 @@
-"""PDF ingestion pipeline: MarkItDown conversion + Groq structured extraction.
+"""PDF ingestion pipeline: MarkItDown conversion + LLM structured extraction.
 
 Flow:
 1. Save the raw PDF (Backblaze B2 when configured, else ``storage/pdfs/``).
 2. Run MarkItDown on the PDF bytes and write the markdown to ``storage/markdowns/``.
-3. Feed the markdown to Groq (JSON mode) with a strict Pydantic schema and
-   validate the response into ``LLMExamsExtractionSchema``.
+3. Feed the markdown to Gemini (OpenAI-compatible endpoint) or Groq (JSON mode)
+   with a strict Pydantic schema and validate the response into
+   ``LLMExamsExtractionSchema``.
 4. Insert the structured rows (Exam + ExamBiomarker) into SQLite.
 """
 
@@ -20,6 +21,7 @@ from typing import List, Optional, Tuple
 
 from groq import Groq
 from markitdown import MarkItDown
+from openai import OpenAI
 from sqlmodel import Session, select
 
 import object_storage
@@ -34,13 +36,26 @@ from models import (
 
 logger = logging.getLogger("parser")
 
-# Model chain for structured extraction. These are the JSON-capable chat
-# models available on this Groq API key; first success wins.
+# Extraction providers. Gemini is tried first when GEMINI_API_KEY is set: its
+# free tier accepts a whole report in one request, while Groq's free plan caps a
+# model at 8000 tokens per minute (which is why the Groq path truncates).
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+# Gemini's context window swallows a full report; keep a ceiling anyway so a
+# runaway conversion cannot blow up the request.
+GEMINI_MAX_CHARS = 400_000
+
+# Groq fallback chain: these are the JSON-capable chat models available on this
+# Groq API key; first success wins.
 PRIMARY_MODEL = "openai/gpt-oss-120b"
 FALLBACK_MODELS = (
     "qwen/qwen3.8-27b",
     "openai/gpt-oss-20b",
 )
+# Groq's free tier rejects prompts above its per-minute token budget.
+GROQ_MAX_CHARS = 60_000
+
+JSON_FENCE_RE = re.compile(r"^```(?:json)?|```$", re.IGNORECASE | re.MULTILINE)
 
 ISO_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 
@@ -142,45 +157,102 @@ def _fallback_date(markdown: str) -> date:
     return datetime.utcnow().date()
 
 
-def _call_groq(client: Groq, model: str, markdown: str) -> LLMExamsExtractionSchema:
-    """One JSON-mode extraction attempt; raises on API or validation failure."""
-    truncated = markdown if len(markdown) <= 60_000 else markdown[:60_000]
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
+def _strip_json_fences(content: str) -> str:
+    """Gemini sometimes wraps JSON in a ```json fence even in JSON mode."""
+    return JSON_FENCE_RE.sub("", content.strip()).strip()
+
+
+def _invoke_model(
+    client,
+    model: str,
+    markdown: str,
+    max_chars: int,
+    json_mode: bool,
+) -> LLMExamsExtractionSchema:
+    """One extraction request. ``client`` is a Groq or OpenAI SDK client."""
+    kwargs = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": _system_prompt()},
-            {"role": "user", "content": truncated},
+            {"role": "user", "content": markdown[:max_chars]},
         ],
-        response_format={"type": "json_object"},
-        temperature=0,
-        max_tokens=8192,
-    )
+        "temperature": 0,
+        "max_tokens": 8192,
+    }
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+    response = client.chat.completions.create(**kwargs)
     content = response.choices[0].message.content
-    if not content:
-        raise ValueError("Groq returned an empty completion.")
-    return LLMExamsExtractionSchema.model_validate_json(content)
+    if not content or not content.strip():
+        raise ValueError(f"{model} returned an empty completion.")
+    return LLMExamsExtractionSchema.model_validate_json(_strip_json_fences(content))
+
+
+def _call_model(
+    client,
+    model: str,
+    markdown: str,
+    max_chars: int,
+    retry_without_json_mode: bool = False,
+) -> LLMExamsExtractionSchema:
+    """One attempt per model, retrying once without JSON mode when asked to.
+
+    Gemini's OpenAI-compatibility layer does not accept every OpenAI field, so
+    a rejected ``response_format`` must not lose the provider.
+    """
+    try:
+        return _invoke_model(client, model, markdown, max_chars, True)
+    except Exception as exc:  # noqa: BLE001 - the retry decision belongs here
+        if not retry_without_json_mode:
+            raise
+        logger.warning("%s rejected JSON mode (%s); retrying without it", model, exc)
+        return _invoke_model(client, model, markdown, max_chars, False)
 
 
 def _extract_structured(
     markdown: str,
 ) -> Tuple[Optional[LLMExamsExtractionSchema], Optional[str]]:
-    """Step 3: Groq extraction with JSON mode; falls back to a faster model once.
+    """Step 3: Gemini first when configured, then the Groq fallback chain.
 
     Returns (extraction, error_message). Exactly one of them is None.
     """
-    api_key = os.environ.get("GROQ_API_KEY", "").strip()
-    if not api_key:
-        return None, "GROQ_API_KEY is not configured on this server."
-    client = Groq(api_key=api_key)
-    last_error: Optional[str] = None
-    for model in (PRIMARY_MODEL, *FALLBACK_MODELS):
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+    if not gemini_key and not groq_key:
+        return None, (
+            "No extraction provider is configured: set GEMINI_API_KEY "
+            "(or GROQ_API_KEY) on this server."
+        )
+
+    problems: List[str] = []
+
+    if gemini_key:
+        model = os.environ.get("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
+        client = OpenAI(api_key=gemini_key, base_url=GEMINI_BASE_URL)
         try:
-            extraction = _call_groq(client, model, markdown)
+            extraction = _call_model(
+                client,
+                model,
+                markdown,
+                GEMINI_MAX_CHARS,
+                retry_without_json_mode=True,
+            )
             return extraction, None
         except Exception as exc:  # noqa: BLE001 - report and fall back
-            last_error = f"{model}: {exc}"
-            logger.warning("Groq extraction failed via %s: %s", model, exc)
-    return None, f"Structured extraction failed ({last_error})"
+            problems.append(f"{model}: {exc}")
+            logger.warning("Gemini extraction failed via %s: %s", model, exc)
+
+    if groq_key:
+        client = Groq(api_key=groq_key)
+        for model in (PRIMARY_MODEL, *FALLBACK_MODELS):
+            try:
+                extraction = _call_model(client, model, markdown, GROQ_MAX_CHARS)
+                return extraction, None
+            except Exception as exc:  # noqa: BLE001 - report and fall back
+                problems.append(f"{model}: {exc}")
+                logger.warning("Groq extraction failed via %s: %s", model, exc)
+
+    return None, f"Structured extraction failed ({'; '.join(problems)})"
 
 
 def _to_response(exam: Exam, biomarkers: List[ExamBiomarker]) -> ExamResponse:

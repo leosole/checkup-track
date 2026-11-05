@@ -1,8 +1,8 @@
-"""ASGI entrypoint for Freebuff's Python hosting.
+"""ASGI entrypoint for the Render deployment.
 
-Freebuff runs Python from ``api/*.py`` and installs ``api/requirements.txt``
-itself. The application still lives in ``backend/main.py``; this module only
-makes ``backend/`` importable and re-exports the FastAPI ``app`` object.
+Render starts the application from the repository root using this module; the
+application itself lives in ``backend/main.py``. This module makes ``backend/``
+importable and re-exports the FastAPI ``app`` object.
 
 The backend modules use flat imports (``from database import ...``), so that
 directory has to be on ``sys.path`` before importing ``main``.

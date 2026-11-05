@@ -1,6 +1,5 @@
-# Production dependencies for the api/ entrypoint (Freebuff Python hosting
-# installs this file automatically). backend/requirements.txt includes it, so
-# this is the single source of truth.
+# Production dependencies for the api/ entrypoint. backend/requirements.txt
+# includes this file, so this is the single source of truth.
 fastapi>=0.115.0,<1.0.0
 uvicorn[standard]>=0.30.0,<1.0.0
 sqlmodel>=0.0.21,<1.0.0
@@ -8,6 +7,8 @@ python-multipart>=0.0.9,<1.0.0
 google-auth>=2.29.0,<3.0.0
 PyJWT>=2.8.0,<3.0.0
 groq>=0.13.0,<1.0.0
+# OpenAI SDK, pointed at Gemini's OpenAI-compatible endpoint (parser.py).
+openai>=1.40.0,<3.0.0
 boto3>=1.34.0,<2.0.0
 markitdown[pdf]>=0.1.3,<2.0.0
 pydantic>=2.7.0,<3.0.0

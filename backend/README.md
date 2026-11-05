@@ -19,7 +19,7 @@ Copy `.env.example` to `.env.local` in the repo root and set the values; the app
 loads that file (and `.env`) automatically, while variables you export yourself
 take precedence:
 
-- `GROQ_API_KEY` — Groq key used for LLM extraction (`llama-3.3-70b-versatile`, fallback `llama-3.1-8b-instant`)
+- `GEMINI_API_KEY` — Gemini key used for LLM extraction (default `gemini-3.8-flash`, override with `GEMINI_MODEL`); tried first because its free tier accepts a whole report in one request. `GROQ_API_KEY` is the fallback (`openai/gpt-oss-120b`, `qwen/qwen3.8-27b`, `openai/gpt-oss-20b`).
 - `GOOGLE_CLIENT_ID` — Google OAuth web client ID for ID-token verification
 - `JWT_SECRET` — signing secret for local JWTs (a generated dev secret is persisted to `.jwt_secret` when unset)
 

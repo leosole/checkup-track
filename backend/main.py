@@ -6,8 +6,10 @@ sign-in/config routes require ``Authorization: Bearer <TOKEN>``.
 """
 
 import logging
+import os
 import re
 from datetime import date
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import (
@@ -21,6 +23,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 import object_storage
@@ -482,3 +485,27 @@ def time_series(
         series.append(TimeSeries(spec=spec, unit=unit, points=points))
 
     return TimeSeriesResponse(series=series)
+
+
+# ---------------------------------------------------------------------------
+# Built SPA (single-service hosts such as Render)
+# ---------------------------------------------------------------------------
+
+# Hosts that serve only this ASGI app need the SPA from the same origin, which
+# keeps every frontend call on relative /api paths. It stays opt-in for local
+# development, where Vite serves the frontend separately.
+if os.environ.get("SERVE_STATIC", "").strip() == "1":
+    FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+    if FRONTEND_DIST.is_dir():
+        # Mounted last so /health, /api/* and /openapi.json keep precedence.
+        app.mount(
+            "/",
+            StaticFiles(directory=str(FRONTEND_DIST), html=True),
+            name="spa",
+        )
+        logger.info("Serving the built SPA from %s", FRONTEND_DIST)
+    else:
+        logger.warning(
+            "SERVE_STATIC=1 but %s is missing (run `npm --prefix frontend run build`)",
+            FRONTEND_DIST,
+        )

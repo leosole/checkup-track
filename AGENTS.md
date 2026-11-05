@@ -23,30 +23,33 @@ smoke test (see *Verification*).
 ## Layout
 
 ```
-api/index.py            ASGI entrypoint used by Freebuff hosting (re-exports backend app)
-api/requirements.txt    canonical production dependency list (hosting installs this)
+api/index.py            ASGI entrypoint used by Render (re-exports backend app)
+api/requirements.txt    canonical production dependency list (used by Render)
 backend/main.py         all routes, auth dependencies, upload size guard
 backend/models.py       SQLModel tables + Pydantic request/response schemas
 backend/database.py     engine/session setup, DATABASE_URL vs SQLite, init_db()
 backend/auth.py         Google ID-token verification, JWT issue/verify, current user
-backend/parser.py       PDF -> Markdown -> Groq extraction, exam search
+backend/parser.py       PDF -> Markdown -> Gemini (primary) / Groq (fallback) extraction, exam search
 backend/object_storage.py  Backblaze B2 (S3 API) with local-disk fallback
 frontend/src/app.tsx    auth gate: SignInView when signed out, DashboardView when signed in
 frontend/src/api-client.ts  typed fetch wrapper; every protected call sends Bearer token
 frontend/src/auth-context.tsx  user bootstrap; JWT lives in localStorage (`vitals.jwt`)
 frontend/src/components/  dashboard-view, calendar-grid, analytics-chart,
                           medication-modal, sign-in-view, ui/ primitives
-scripts/preview.sh      starts uvicorn (8000) + vite ($PORT) for the preview
+scripts/preview.sh      starts uvicorn (8000) + vite (5173 by default) locally
 ```
 
 ## Commands
 
 ```bash
-# backend (needs GROQ_API_KEY for uploads); create the venv once:
+# backend (needs GEMINI_API_KEY or GROQ_API_KEY for uploads); create the venv once:
 #   cd backend && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 # Always run the backend with the venv interpreter: the system `python3` may be
 # older than the dependencies allow (uvicorn, markitdown).
 cd backend && .venv/bin/python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# Or start the backend and frontend together:
+sh scripts/preview.sh
 
 # frontend
 npm --prefix frontend install
@@ -59,11 +62,6 @@ CI (`.github/workflows/ci.yml`) runs exactly: `npm ci && npm run typecheck &&
 npm run build` in `frontend/`, and `pip install -r requirements.txt` plus an
 import + table-schema assertion in `backend/`. Do not add slow or network-heavy
 steps to CI.
-
-In the Freebuff workspace, do **not** start the dev server by hand. Use
-`freebuff-preview restart` / `status`; `sh scripts/preview.sh` binds both
-processes to `0.0.0.0` and reads `$PORT` for the frontend. Backend auto-reload
-is on unless `RELOAD=0` is set, so it doubles as the one-command local launcher.
 
 ## Conventions that matter
 
@@ -118,20 +116,23 @@ is on unless `RELOAD=0` is set, so it doubles as the one-command local launcher.
 
 | Key | Needed for | Missing behavior |
 | --- | --- | --- |
-| `GROQ_API_KEY` | PDF extraction (`POST /api/exams/upload`) | upload fails with a config error |
+| `GEMINI_API_KEY` | PDF extraction (primary provider) | falls back to Groq; upload fails with a config error when neither key is set |
+| `GEMINI_MODEL` | optional model override | defaults to `gemini-3.8-flash` |
+| `GROQ_API_KEY` | PDF extraction (fallback: `openai/gpt-oss-120b` -> `qwen/qwen3.8-27b` -> `openai/gpt-oss-20b`) | upload fails with a config error when neither key is set |
 | `GOOGLE_CLIENT_ID` | sign-in | `/api/auth/config` reports not configured, sign-in disabled |
 | `JWT_SECRET` | signing tokens | dev: auto-generated `backend/.jwt_secret`; prod: unstable tokens |
 | `DATABASE_URL` | Postgres in production | falls back to SQLite |
 | `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` | durable PDF storage | local disk (ephemeral in production) |
+| `SERVE_STATIC` | set `1` on Render so FastAPI also serves `frontend/dist` at `/` | unset locally |
 
 `env.example` is the template; `.env.local` holds real dev values. Never read or
 print it. `backend/env_loader.py` loads `.env.local` / `.env` into `os.environ`
 when the backend is imported (existing shell/CI/platform values always win), so
 plain `uvicorn main:app` picks them up too — do not reintroduce `--env-file`
 flags or shell `source` steps, and keep the `load_env_files()` call before any
-module reads configuration. Production variables are managed separately
-(`freebuff-deploy env set`) and GitHub Actions secrets do not reach the running
-app — they only exist inside CI runners.
+module reads configuration. Configure production variables in Render's service
+environment; GitHub Actions secrets are only available inside CI and do not
+reach the running app.
 
 ## API map
 
@@ -142,8 +143,7 @@ JWT: `GET /api/auth/me`; `POST /api/exams/upload` (multipart `file` + optional
 `POST|GET /api/medications`, `PATCH|DELETE /api/medications/{id}`;
 `GET /api/calendar`;
 `GET /api/analytics/time-series?specs=Glucose&specs=Hemoglobin&start_date=&end_date=`.
-Routes keep the `/api/` prefix so the Vite proxy and the hosting catch-all both
-work.
+Routes keep the `/api/` prefix so the Vite proxy and the Render-hosted SPA work.
 
 ## Verification
 
@@ -154,8 +154,9 @@ Before calling work done:
 3. Smoke the changed endpoints against a running backend. Use a throwaway DB
    (e.g. `DATABASE_URL=sqlite:////tmp/smoke.db`) so you never pollute `backend/health.db`.
    Unauthenticated protected routes must still return 401.
-4. `freebuff-deploy check` must stay `deployable: true` with `problems: []` when
-   you touch `api/`, requirements, or the build setup.
+4. Keep the Render Blueprint's build command, ASGI entrypoint, and required
+  runtime environment variables in sync when changing `api/`, requirements,
+  or the frontend build setup.
 
 ## Known constraints
 
