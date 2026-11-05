@@ -15,12 +15,14 @@ import { Button } from "./ui/button";
 
 interface CalendarGridProps {
   data: CalendarData;
-  /** Open the stored PDF for an exam shown on the calendar. */
+  /** Show the selected exam or medication details. */
   on_exam_click?: (exam_id: number) => void;
+  on_medication_click?: (medication_id: number) => void;
 }
 
 interface Bar {
   id: string;
+  medication_id: number;
   label: string;
   color: string;
   /** column index (0-6) where the bar starts inside this week row */
@@ -40,7 +42,11 @@ const MED_COLORS = [
   "bg-orange-500",
 ];
 
-export function CalendarGrid({ data, on_exam_click }: CalendarGridProps) {
+export function CalendarGrid({
+  data,
+  on_exam_click,
+  on_medication_click,
+}: CalendarGridProps) {
   const [cursor, set_cursor] = useState(() => start_of_month(new Date()));
 
   const days = useMemo(() => month_grid(cursor), [cursor]);
@@ -83,6 +89,7 @@ export function CalendarGrid({ data, on_exam_click }: CalendarGridProps) {
 
       const bar: Bar = {
         id: `${med.id}-${index}`,
+        medication_id: med.id,
         label: med.name,
         color: MED_COLORS[index % MED_COLORS.length],
         start_col,
@@ -215,7 +222,7 @@ export function CalendarGrid({ data, on_exam_click }: CalendarGridProps) {
                               key={exam.id}
                               type="button"
                               onClick={() => on_exam_click?.(exam.id)}
-                              title={`Open PDF — ${exam.title}`}
+                              title={`View details — ${exam.title}`}
                               className="flex w-full items-center gap-1 truncate text-left text-[10px] font-medium text-brand-700 hover:underline dark:text-brand-300"
                             >
                               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500 dark:bg-brand-400" />
@@ -241,9 +248,12 @@ export function CalendarGrid({ data, on_exam_click }: CalendarGridProps) {
                   >
                     {lanes.map((lane, lane_index) =>
                       lane.map((bar) => (
-                        <div
+                        <button
+                          type="button"
                           key={bar.id}
+                          onClick={() => on_medication_click?.(bar.medication_id)}
                           title={`${bar.label} — active across this week`}
+                          aria-label={`${bar.label}, medication details`}
                           className={`absolute flex h-4 items-center rounded-full px-2 text-[10px] font-semibold text-white shadow-sm ${bar.color}`}
                           style={{
                             top: lane_index * lane_height + 4,
@@ -252,7 +262,7 @@ export function CalendarGrid({ data, on_exam_click }: CalendarGridProps) {
                           }}
                         >
                           <span className="truncate">{bar.label}</span>
-                        </div>
+                        </button>
                       )),
                     )}
                   </div>
@@ -265,7 +275,7 @@ export function CalendarGrid({ data, on_exam_click }: CalendarGridProps) {
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-brand-500" />
-            Exam performed (click to open the PDF)
+            Exam performed (click for details)
           </span>
           {data.medications.slice(0, 6).map((med, index) => (
             <span key={med.id} className="flex items-center gap-1.5">

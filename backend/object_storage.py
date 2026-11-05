@@ -80,9 +80,12 @@ def download_pdf(key: str) -> bytes:
 
 
 def delete_pdf(key: str) -> None:
-    if not _ENABLED:
+    if key.startswith("exams/"):
+        if not _ENABLED:
+            raise RuntimeError("Object storage is not configured.")
+        _client().delete_object(Bucket=_BUCKET, Key=key)
         return
-    _client().delete_object(Bucket=_BUCKET, Key=key)
+    local_pdf_path(key).unlink(missing_ok=True)
 
 
 def local_pdf_path(rel_path: str) -> Path:

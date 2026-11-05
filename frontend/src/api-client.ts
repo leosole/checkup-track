@@ -208,6 +208,10 @@ export const api = {
     });
   },
 
+  delete_exam(id: number): Promise<{ deleted: number }> {
+    return request(`/api/exams/${id}`, { method: "DELETE" });
+  },
+
   list_medications(): Promise<Medication[]> {
     return request("/api/medications");
   },

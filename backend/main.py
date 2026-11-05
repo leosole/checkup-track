@@ -36,7 +36,7 @@ from auth import (
     upsert_user,
     verify_google_id_token,
 )
-from database import get_session, init_db
+from database import MARKDOWN_DIR, get_session, init_db
 from models import (
     AuthResponse,
     BiomarkerResponse,
@@ -227,6 +227,43 @@ def rename_exam(
     session.commit()
     session.refresh(exam)
     return _exam_to_response(session, exam)
+
+
+@app.delete("/api/exams/{exam_id}", tags=["exams"])
+def delete_exam(
+    exam_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Delete an exam, its biomarkers, and its stored PDF."""
+    exam = session.get(Exam, exam_id)
+    if exam is None or exam.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+
+    try:
+        object_storage.delete_pdf(exam.pdf_path)
+    except Exception as exc:  # noqa: BLE001 - preserve the row if storage fails
+        logger.exception("Could not delete stored PDF for exam %s", exam_id)
+        raise HTTPException(
+            status_code=502,
+            detail="Could not delete the stored PDF.",
+        ) from exc
+
+    biomarkers = session.exec(
+        select(ExamBiomarker).where(ExamBiomarker.exam_id == exam_id)
+    ).all()
+    for biomarker in biomarkers:
+        session.delete(biomarker)
+    session.delete(exam)
+    session.commit()
+
+    markdown_path = MARKDOWN_DIR / Path(exam.markdown_path).name
+    try:
+        markdown_path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Could not delete Markdown for exam %s", exam_id, exc_info=True)
+
+    return {"deleted": exam_id}
 
 
 @app.get("/api/exams/{exam_id}/pdf", tags=["exams"])

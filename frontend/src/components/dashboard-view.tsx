@@ -12,12 +12,17 @@ import {
   type Exam,
   type Medication,
 } from "../api-client";
+import { TbMoonFilled, TbSunLowFilled } from "react-icons/tb";
 import { format_date } from "../date-utils";
 import { use_auth } from "../auth-context";
 import { apply_theme, init_theme, type Theme } from "../theme";
 import { AnalyticsChart } from "./analytics-chart";
+import { CalendarItemModal, type CalendarSelection } from "./calendar-item-modal";
 import { CalendarGrid } from "./calendar-grid";
+import { ExamRenameModal } from "./exam-rename-modal";
+import { ExamsView } from "./exams-view";
 import { MedicationModal } from "./medication-modal";
+import { MedicationsView } from "./medications-view";
 import { Badge, Card, EmptyState, Spinner } from "./ui/badge";
 import { Button } from "./ui/button";
 
@@ -27,6 +32,13 @@ const FIELD =
   "ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset " +
   "focus:ring-brand-600 dark:bg-gray-900 dark:text-gray-100 dark:ring-gray-700 " +
   "dark:placeholder:text-gray-500";
+
+type DashboardRoute = "/" | "/exams" | "/medications";
+
+function route_from_path(pathname: string): DashboardRoute {
+  if (pathname === "/exams" || pathname === "/medications") return pathname;
+  return "/";
+}
 
 function StatCard({
   label,
@@ -64,8 +76,15 @@ function StatCard({
 export function DashboardView() {
   const { user, sign_out } = use_auth();
 
+  const [route, set_route] = useState<DashboardRoute>(() =>
+    route_from_path(window.location.pathname),
+  );
   const [exams, set_exams] = useState<Exam[]>([]);
   const [medications, set_medications] = useState<Medication[]>([]);
+  const [calendar_item, set_calendar_item] = useState<CalendarSelection | null>(null);
+  const [calendar_item_error, set_calendar_item_error] = useState<string | null>(null);
+  const [calendar_action_busy, set_calendar_action_busy] = useState(false);
+  const [rename_modal_exam, set_rename_modal_exam] = useState<Exam | null>(null);
   const [calendar, set_calendar] = useState<CalendarData>({
     exams: [],
     medications: [],
@@ -107,6 +126,25 @@ export function DashboardView() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const sync_route = () => {
+      const next_route = route_from_path(window.location.pathname);
+      if (next_route !== window.location.pathname) {
+        window.history.replaceState(null, "", next_route);
+      }
+      set_route(next_route);
+    };
+    window.addEventListener("popstate", sync_route);
+    return () => window.removeEventListener("popstate", sync_route);
+  }, []);
+
+  function navigate(next_route: DashboardRoute) {
+    if (window.location.pathname !== next_route) {
+      window.history.pushState(null, "", next_route);
+    }
+    set_route(next_route);
+  }
 
   // Debounced global search against GET /api/exams/search?q=
   useEffect(() => {
@@ -154,6 +192,95 @@ export function DashboardView() {
         text: err instanceof Error ? err.message : "Could not open the PDF.",
       });
     }
+  }
+
+  function show_calendar_exam(exam_id: number) {
+    const exam = exams.find((item) => item.id === exam_id);
+    if (exam) {
+      set_calendar_item_error(null);
+      set_calendar_item({ kind: "exam", exam });
+    }
+  }
+
+  function show_calendar_medication(medication_id: number) {
+    const medication = medications.find((item) => item.id === medication_id);
+    if (medication) {
+      set_calendar_item_error(null);
+      set_calendar_item({ kind: "medication", medication });
+    }
+  }
+
+  async function download_exam_file(exam: Exam) {
+    set_calendar_action_busy(true);
+    set_calendar_item_error(null);
+    try {
+      const blob = await api.exam_pdf(exam.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const stem = exam.title.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[_\.]+|[_\.]+$/g, "");
+      anchor.href = url;
+      anchor.download = `${stem || "exam"}.pdf`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      set_calendar_item_error(err instanceof Error ? err.message : "Could not download the PDF.");
+    } finally {
+      set_calendar_action_busy(false);
+    }
+  }
+
+  async function delete_calendar_item() {
+    if (!calendar_item) return;
+    const item_name = calendar_item.kind === "exam"
+      ? calendar_item.exam.title
+      : calendar_item.medication.name;
+    const confirmation = calendar_item.kind === "exam"
+      ? `Delete "${item_name}" and its uploaded PDF? This cannot be undone.`
+      : `Delete "${item_name}"? This cannot be undone.`;
+    if (!window.confirm(confirmation)) return;
+
+    set_calendar_action_busy(true);
+    set_calendar_item_error(null);
+    try {
+      if (calendar_item.kind === "exam") {
+        const exam_id = calendar_item.exam.id;
+        await api.delete_exam(exam_id);
+        set_exams((current) => current.filter((exam) => exam.id !== exam_id));
+        set_calendar((current) => ({
+          ...current,
+          exams: current.exams.filter((exam) => exam.id !== exam_id),
+        }));
+      } else {
+        const medication_id = calendar_item.medication.id;
+        await api.delete_medication(medication_id);
+        set_medications((current) =>
+          current.filter((medication) => medication.id !== medication_id),
+        );
+        set_calendar((current) => ({
+          ...current,
+          medications: current.medications.filter((med) => med.id !== medication_id),
+        }));
+      }
+      set_calendar_item(null);
+      await refresh();
+    } catch (err) {
+      set_calendar_item_error(err instanceof Error ? err.message : "Could not delete the item.");
+    } finally {
+      set_calendar_action_busy(false);
+    }
+  }
+
+  function edit_calendar_item() {
+    if (!calendar_item) return;
+    if (calendar_item.kind === "exam") {
+      set_rename_modal_exam(calendar_item.exam);
+    } else {
+      set_editing_med(calendar_item.medication);
+      set_modal_open(true);
+    }
+    set_calendar_item(null);
   }
 
   async function handle_upload(e: ChangeEvent<HTMLInputElement>) {
@@ -215,7 +342,28 @@ export function DashboardView() {
     }
   }
 
-  const displayed = search_query.trim() ? (search_results ?? []) : exams;
+  async function delete_exam(exam: Exam) {
+    if (!window.confirm(`Delete "${exam.title}" and its uploaded PDF? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      await api.delete_exam(exam.id);
+      set_exams((current) => current.filter((item) => item.id !== exam.id));
+      set_search_results((current) => current?.filter((item) => item.id !== exam.id) ?? null);
+      set_calendar((current) => ({
+        ...current,
+        exams: current.exams.filter((item) => item.id !== exam.id),
+      }));
+      await refresh();
+    } catch (err) {
+      set_notice({
+        kind: "err",
+        text: err instanceof Error ? err.message : "Could not delete the exam.",
+      });
+    }
+  }
+
+  const displayed = search_query.trim() ? (search_results ?? []) : exams.slice(0, 5);
 
   const abnormal_count = exams.reduce(
     (sum, exam) => sum + exam.biomarkers.filter((b) => b.is_abnormal).length,
@@ -227,10 +375,22 @@ export function DashboardView() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <input
+        ref={file_input_ref}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="hidden"
+        onChange={handle_upload}
+      />
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            aria-label="Go to dashboard home"
+            onClick={() => navigate("/")}
+            className="flex shrink-0 items-center gap-2.5 text-left"
+          >
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 12h4l2-6 4 12 2-6h6" />
@@ -242,9 +402,11 @@ export function DashboardView() {
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">Health dashboard</p>
             </div>
-          </div>
+          </button>
 
-          <div className="relative ml-auto w-full max-w-md">
+          <div
+            className={`relative w-full max-w-md ${route !== "/" ? "hidden" : ""}`}
+          >
             <svg
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
               viewBox="0 0 20 20"
@@ -271,7 +433,7 @@ export function DashboardView() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={toggle_theme}
@@ -280,17 +442,9 @@ export function DashboardView() {
               className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
             >
               {theme === "dark" ? (
-                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15zM10 7a3 3 0 100 6 3 3 0 000-6zM15.657 5.404a.75.75 0 11-1.06-1.06l1.06-1.061a.75.75 0 011.06 1.06l-1.06 1.06zM4.343 14.596a.75.75 0 11-1.06 1.06l-1.06-1.06a.75.75 0 011.06-1.06l1.06 1.06zM18 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0118 10zM5 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 015 10zM15.657 14.596a.75.75 0 111.06 1.06l-1.06 1.06a.75.75 0 11-1.06-1.06l1.06-1.06zM4.343 5.404a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 11-1.06 1.061l-1.06-1.06z" />
-                </svg>
+                <TbSunLowFilled className="h-5 w-5" aria-hidden="true" />
               ) : (
-                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fillRule="evenodd"
-                    d="M7.455 2.004a.75.75 0 01.26.77 7 7 0 009.958 9.957.75.75 0 011.067.852A8.5 8.5 0 117.455 2.004z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+                <TbMoonFilled className="h-5 w-5" aria-hidden="true" />
               )}
             </button>
             <div className="group relative">
@@ -323,16 +477,11 @@ export function DashboardView() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <main
+        className={`mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 ${route !== "/" ? "hidden" : ""}`}
+      >
         {/* Actions row */}
         <div className="flex flex-wrap items-center gap-3">
-          <input
-            ref={file_input_ref}
-            type="file"
-            accept="application/pdf,.pdf"
-            className="hidden"
-            onChange={handle_upload}
-          />
           <input
             type="text"
             value={exam_name}
@@ -353,14 +502,6 @@ export function DashboardView() {
           >
             + Add medication
           </Button>
-          {uploading && (
-            <div className="h-2 w-40 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
-              <div
-                className="h-full rounded-full bg-brand-600 transition-all dark:bg-brand-500"
-                style={{ width: `${upload_progress}%` }}
-              />
-            </div>
-          )}
           {notice && (
             <p
               className={[
@@ -422,7 +563,18 @@ export function DashboardView() {
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">
               {search_query.trim() ? "Search results" : "Recent exams"}
             </h2>
-            {searching && <Spinner className="h-4 w-4" />}
+            <div className="flex items-center gap-3">
+              {searching && <Spinner className="h-4 w-4" />}
+              {!search_query.trim() && exams.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/exams")}
+                  className="text-sm font-semibold text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
+                >
+                  View more
+                </button>
+              )}
+            </div>
           </div>
 
           {loading ? (
@@ -486,19 +638,32 @@ export function DashboardView() {
                               <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
                             </svg>
                           </button>
+                          <button
+                            type="button"
+                            aria-label={`Delete ${exam.title}`}
+                            title="Delete exam and PDF"
+                            onClick={() => void delete_exam(exam)}
+                            className="rounded-md p-1 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 dark:text-gray-500 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                          >
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                              <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75V4H3.75a.75.75 0 000 1.5h.616l.74 10.5A2.75 2.75 0 007.846 18.5h4.308a2.75 2.75 0 002.744-2.5l.74-10.5h.616a.75.75 0 000-1.5H14v-.25A2.75 2.75 0 0011.25 1h-2.5zM7.5 4v.25c0 .69.56 1.25 1.25 1.25h2.5c.69 0 1.25-.56 1.25-1.25V4h-5zm1.5 4.5a.75.75 0 011.5 0v5a.75.75 0 01-1.5 0v-5zm3.75-.75a.75.75 0 000 1.5v5a.75.75 0 001.5 0v-5a.75.75 0 00-1.5 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
                         </div>
                       )}
-                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                        Performed {format_date(exam.date_performed)}
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Performed {format_date(exam.date_performed)}
+                        </p>
+                        <Badge
+                          tone={exam.biomarkers.some((b) => b.is_abnormal) ? "danger" : "success"}
+                        >
+                          {exam.biomarkers.filter((b) => b.is_abnormal).length > 0
+                            ? `${exam.biomarkers.filter((b) => b.is_abnormal).length} out of range`
+                            : "All in range"}
+                        </Badge>
+                      </div>
                     </div>
-                    <Badge
-                      tone={exam.biomarkers.some((b) => b.is_abnormal) ? "danger" : "success"}
-                    >
-                      {exam.biomarkers.filter((b) => b.is_abnormal).length > 0
-                        ? `${exam.biomarkers.filter((b) => b.is_abnormal).length} out of range`
-                        : "All in range"}
-                    </Badge>
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-1.5">
@@ -560,7 +725,11 @@ export function DashboardView() {
 
         {/* Calendar */}
         <section>
-          <CalendarGrid data={calendar} on_exam_click={(id) => void open_exam_pdf(id)} />
+          <CalendarGrid
+            data={calendar}
+            on_exam_click={show_calendar_exam}
+            on_medication_click={show_calendar_medication}
+          />
         </section>
 
         {/* Chart */}
@@ -574,16 +743,25 @@ export function DashboardView() {
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">
               Medications
             </h2>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                set_editing_med(null);
-                set_modal_open(true);
-              }}
-            >
-              + Add
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  set_editing_med(null);
+                  set_modal_open(true);
+                }}
+              >
+                + Add
+              </Button>
+              <button
+                type="button"
+                onClick={() => navigate("/medications")}
+                className="text-sm font-semibold text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
+              >
+                View more
+              </button>
+            </div>
           </div>
           {medications.length === 0 ? (
             <EmptyState
@@ -653,6 +831,55 @@ export function DashboardView() {
         </section>
       </main>
 
+      {route === "/exams" && (
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          {loading ? (
+            <div className="flex justify-center py-12"><Spinner className="h-8 w-8" /></div>
+          ) : (
+            <ExamsView
+              exams={exams}
+              on_back={() => navigate("/")}
+              on_open_pdf={(id) => void open_exam_pdf(id)}
+              on_edit={set_rename_modal_exam}
+              on_upload={() => file_input_ref.current?.click()}
+              uploading={uploading}
+              upload_progress={upload_progress}
+              notice={notice}
+              on_deleted={async (id) => {
+                set_exams((current) => current.filter((exam) => exam.id !== id));
+                set_calendar((current) => ({
+                  ...current,
+                  exams: current.exams.filter((exam) => exam.id !== id),
+                }));
+                await refresh();
+              }}
+            />
+          )}
+        </main>
+      )}
+
+      {route === "/medications" && (
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          {loading ? (
+            <div className="flex justify-center py-12"><Spinner className="h-8 w-8" /></div>
+          ) : (
+            <MedicationsView
+              medications={medications}
+              on_back={() => navigate("/")}
+              on_changed={refresh}
+              on_deleted={async (id) => {
+                set_medications((current) => current.filter((med) => med.id !== id));
+                set_calendar((current) => ({
+                  ...current,
+                  medications: current.medications.filter((med) => med.id !== id),
+                }));
+                await refresh();
+              }}
+            />
+          )}
+        </main>
+      )}
+
       <MedicationModal
         open={modal_open}
         med={editing_med}
@@ -661,6 +888,24 @@ export function DashboardView() {
           set_editing_med(null);
         }}
         on_saved={() => void refresh()}
+      />
+      <ExamRenameModal
+        exam={rename_modal_exam}
+        on_close={() => set_rename_modal_exam(null)}
+        on_saved={refresh}
+      />
+      <CalendarItemModal
+        item={calendar_item}
+        error={calendar_item_error}
+        busy={calendar_action_busy}
+        on_close={() => set_calendar_item(null)}
+        on_edit={edit_calendar_item}
+        on_delete={() => void delete_calendar_item()}
+        on_download={() => {
+          if (calendar_item?.kind === "exam") {
+            void download_exam_file(calendar_item.exam);
+          }
+        }}
       />
     </div>
   );

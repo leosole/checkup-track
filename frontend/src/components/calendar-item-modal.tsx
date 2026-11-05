@@ -1,0 +1,146 @@
+import type { Exam, Medication } from "../api-client";
+import { format_date } from "../date-utils";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Modal } from "./ui/modal";
+
+export type CalendarSelection =
+  | { kind: "exam"; exam: Exam }
+  | { kind: "medication"; medication: Medication };
+
+export function CalendarItemModal({
+  item,
+  error,
+  busy,
+  on_close,
+  on_edit,
+  on_delete,
+  on_download,
+}: {
+  item: CalendarSelection | null;
+  error: string | null;
+  busy: boolean;
+  on_close: () => void;
+  on_edit: () => void;
+  on_delete: () => void;
+  on_download: () => void;
+}) {
+  const is_exam = item?.kind === "exam";
+  const title =
+    item?.kind === "exam"
+      ? item.exam.title
+      : item?.kind === "medication"
+        ? item.medication.name
+        : "Calendar item";
+  const medication_is_active =
+    item?.kind === "medication" &&
+    item.medication.start_date <= new Date().toISOString().slice(0, 10) &&
+    (!item.medication.end_date || item.medication.end_date >= new Date().toISOString().slice(0, 10));
+
+  return (
+    <Modal
+      open={item !== null}
+      title={title}
+      subtitle={is_exam ? "Exam details" : "Medication details"}
+      onClose={on_close}
+      footer={
+        item && (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" size="sm" disabled={busy} onClick={on_edit}>
+              Edit
+            </Button>
+            {is_exam && (
+              <Button variant="secondary" size="sm" loading={busy} onClick={on_download}>
+                Download PDF
+              </Button>
+            )}
+            <Button variant="danger" size="sm" disabled={busy} onClick={on_delete}>
+              Delete
+            </Button>
+          </div>
+        )
+      }
+    >
+      {item?.kind === "exam" ? (
+        <div className="space-y-4">
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Performed</dt>
+              <dd className="mt-1 text-gray-900 dark:text-white">
+                {format_date(item.exam.date_performed)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Biomarkers</dt>
+              <dd className="mt-1 text-gray-900 dark:text-white">
+                {item.exam.biomarkers.length} total
+              </dd>
+            </div>
+          </dl>
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Results</h3>
+              <Badge tone={item.exam.biomarkers.some((biomarker) => biomarker.is_abnormal) ? "danger" : "success"}>
+                {item.exam.biomarkers.filter((biomarker) => biomarker.is_abnormal).length} out of range
+              </Badge>
+            </div>
+            {item.exam.biomarkers.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No biomarkers extracted.</p>
+            ) : (
+              <ul className="max-h-48 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
+                {item.exam.biomarkers.map((biomarker) => (
+                  <li key={biomarker.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <span className="min-w-0 truncate text-gray-700 dark:text-gray-300">
+                      {biomarker.biomarker_name}
+                    </span>
+                    <span className="shrink-0 font-medium text-gray-900 dark:text-white">
+                      {biomarker.value} {biomarker.unit}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : item?.kind === "medication" ? (
+        <dl className="grid grid-cols-2 gap-4 text-sm">
+          <div className="col-span-2">
+            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Status</dt>
+            <dd className="mt-1">
+              <Badge tone={medication_is_active ? "success" : "gray"}>
+                {medication_is_active ? "Active" : "Inactive"}
+              </Badge>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Dosage</dt>
+            <dd className="mt-1 text-gray-900 dark:text-white">{item.medication.dosage}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Frequency</dt>
+            <dd className="mt-1 text-gray-900 dark:text-white">
+              {item.medication.frequency_per_day} per day
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Starts</dt>
+            <dd className="mt-1 text-gray-900 dark:text-white">
+              {format_date(item.medication.start_date)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Ends</dt>
+            <dd className="mt-1 text-gray-900 dark:text-white">
+              {item.medication.end_date ? format_date(item.medication.end_date) : "Ongoing"}
+            </dd>
+          </div>
+        </dl>
+      ) : null}
+      {error && (
+        <p role="alert" className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+          {error}
+        </p>
+      )}
+    </Modal>
+  );
+}
