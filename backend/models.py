@@ -181,6 +181,40 @@ class ExamRename(BaseModel):
     title: str = PydanticField(min_length=1, max_length=200)
 
 
+class ManualBiomarkerInput(BaseModel):
+    biomarker_name: str = PydanticField(min_length=1, max_length=200)
+    value: float = PydanticField(allow_inf_nan=False)
+    unit: str = PydanticField(default="", max_length=100)
+    reference_range: Optional[str] = PydanticField(default=None, max_length=200)
+    is_abnormal: bool = False
+
+    @field_validator("biomarker_name", "unit", "reference_range")
+    @classmethod
+    def trim_text(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip() if value is not None else None
+
+    @field_validator("biomarker_name")
+    @classmethod
+    def biomarker_name_must_not_be_blank(cls, value: str) -> str:
+        if not value:
+            raise ValueError("Biomarker name must not be blank.")
+        return value
+
+
+class ManualExamInput(BaseModel):
+    title: str = PydanticField(min_length=1, max_length=200)
+    date_performed: date
+    biomarkers: List[ManualBiomarkerInput] = PydanticField(max_length=500)
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Exam title must not be blank.")
+        return value
+
+
 class CalendarExam(BaseModel):
     id: int
     title: str

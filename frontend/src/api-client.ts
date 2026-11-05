@@ -49,6 +49,20 @@ export interface Exam {
   extraction_error: string | null;
 }
 
+export interface ManualBiomarkerInput {
+  biomarker_name: string;
+  value: number;
+  unit: string;
+  reference_range: string | null;
+  is_abnormal: boolean;
+}
+
+export interface ManualExamInput {
+  title: string;
+  date_performed: string;
+  biomarkers: ManualBiomarkerInput[];
+}
+
 export interface Medication {
   id: number;
   name: string;
@@ -247,6 +261,13 @@ export const api = {
     return request(`/api/exams/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ title }),
+    });
+  },
+
+  save_manual_exam_results(id: number, input: ManualExamInput): Promise<Exam> {
+    return request(`/api/exams/${id}/manual`, {
+      method: "PUT",
+      body: JSON.stringify(input),
     });
   },
 

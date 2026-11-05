@@ -52,6 +52,7 @@ from models import (
     GoogleConfigResponse,
     HealthResponse,
     LLMProvider,
+    ManualExamInput,
     Medication,
     MedicationCreate,
     MedicationResponse,
@@ -364,6 +365,44 @@ def rename_exam(
     if exam is None or exam.user_id != user.id:
         raise HTTPException(status_code=404, detail="Exam not found.")
     exam.title = payload.title.strip()
+    session.add(exam)
+    session.commit()
+    session.refresh(exam)
+    return _exam_to_response(session, exam)
+
+
+@app.put("/api/exams/{exam_id}/manual", response_model=ExamResponse, tags=["exams"])
+def save_manual_exam_results(
+    exam_id: int,
+    payload: ManualExamInput,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ExamResponse:
+    """Save manually entered exam details and results for an owned exam."""
+    exam = session.get(Exam, exam_id)
+    if exam is None or exam.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+
+    exam.title = payload.title
+    exam.date_performed = payload.date_performed
+    existing_biomarkers = session.exec(
+        select(ExamBiomarker).where(ExamBiomarker.exam_id == exam_id)
+    ).all()
+    for biomarker in existing_biomarkers:
+        session.delete(biomarker)
+
+    for biomarker in payload.biomarkers:
+        session.add(
+            ExamBiomarker(
+                exam_id=exam_id,
+                biomarker_name=biomarker.biomarker_name,
+                value=biomarker.value,
+                unit=biomarker.unit,
+                reference_range=biomarker.reference_range or None,
+                is_abnormal=biomarker.is_abnormal,
+            )
+        )
+
     session.add(exam)
     session.commit()
     session.refresh(exam)

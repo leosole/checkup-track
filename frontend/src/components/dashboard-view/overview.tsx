@@ -13,7 +13,7 @@ interface Notice {
   text: string;
 }
 
-interface DashboardOverviewData {
+export interface DashboardOverviewData {
   route: DashboardRoute;
   exams: Exam[];
   medications: Medication[];
@@ -33,7 +33,7 @@ interface DashboardOverviewData {
   rename_value: string;
 }
 
-interface DashboardOverviewActions {
+export interface DashboardOverviewActions {
   on_upload: () => void;
   on_add_medication: () => void;
   on_exam_name_change: (value: string) => void;

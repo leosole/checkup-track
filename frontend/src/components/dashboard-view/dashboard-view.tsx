@@ -5,8 +5,9 @@ import {
   useState,
   type ChangeEvent,
   type FormEvent,
+  type ReactNode,
 } from "react";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import {
   api,
   type CalendarData,
@@ -17,22 +18,45 @@ import { use_auth } from "../../auth-context";
 import { apply_theme, init_theme, type Theme } from "../../theme";
 import { CalendarItemModal, type CalendarSelection } from "../modal/calendar-item-modal";
 import { ExamRenameModal } from "../modal/exam-rename-modal";
-import { ExamsView } from "../exams-view";
+import { ManualExamModal } from "../modal/manual-exam-modal";
 import { MedicationModal } from "../modal/medication-modal";
-import { MedicationsView } from "../medications-view";
-import { ProfileView } from "../profile-view";
 import { DashboardHeader } from "./header";
-import { DashboardOverview } from "./overview";
-import { route_from_path, type DashboardRoute } from "./types";
-import { Spinner } from "../ui/badge";
+import type { DashboardOverviewActions, DashboardOverviewData } from "./overview";
+import type { DashboardRoute } from "./types";
 
-export function DashboardView() {
+export interface DashboardRouteContent {
+  overview_data: DashboardOverviewData;
+  overview_actions: DashboardOverviewActions;
+  exams: {
+    exams: Exam[];
+    on_back: () => void;
+    on_open_pdf: (id: number) => void;
+    on_select_exam: (exam: Exam) => void;
+    on_edit: (exam: Exam) => void;
+    on_deleted: (id: number) => Promise<void>;
+    on_upload: () => void;
+    uploading: boolean;
+    upload_progress: number;
+    notice: { kind: "ok" | "err"; text: string } | null;
+  };
+  medications: {
+    medications: Medication[];
+    on_back: () => void;
+    on_changed: () => Promise<void>;
+    on_deleted: (id: number) => Promise<void>;
+  };
+  loading: boolean;
+  on_back: () => void;
+}
+
+export function DashboardLayout({
+  route,
+  children,
+}: {
+  route: DashboardRoute;
+  children: (content: DashboardRouteContent) => ReactNode;
+}) {
   const { user, sign_out } = use_auth();
-
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-  const route = route_from_path(pathname);
   const router_navigate = useNavigate();
   const [exams, set_exams] = useState<Exam[]>([]);
   const [medications, set_medications] = useState<Medication[]>([]);
@@ -40,6 +64,7 @@ export function DashboardView() {
   const [calendar_item_error, set_calendar_item_error] = useState<string | null>(null);
   const [calendar_action_busy, set_calendar_action_busy] = useState(false);
   const [rename_modal_exam, set_rename_modal_exam] = useState<Exam | null>(null);
+  const [manual_exam, set_manual_exam] = useState<Exam | null>(null);
   const [calendar, set_calendar] = useState<CalendarData>({
     exams: [],
     medications: [],
@@ -242,10 +267,7 @@ export function DashboardView() {
       set_exam_name("");
       await refresh();
       if (exam.extraction_error) {
-        set_notice({
-          kind: "err",
-          text: `Saved, but extraction had a problem: ${exam.extraction_error}`,
-        });
+        set_manual_exam(exam);
       } else {
         set_notice({
           kind: "ok",
@@ -261,6 +283,16 @@ export function DashboardView() {
       set_uploading(false);
       window.setTimeout(() => set_upload_progress(0), 800);
     }
+  }
+
+  function keep_pdf_only() {
+    if (manual_exam) {
+      set_notice({
+        kind: "ok",
+        text: `Saved “${manual_exam.title}” as a PDF-only exam in your calendar.`,
+      });
+    }
+    set_manual_exam(null);
   }
 
   async function submit_rename(e: FormEvent, exam: Exam) {
@@ -312,6 +344,98 @@ export function DashboardView() {
   const active_meds = medications.filter(
     (m) => !m.end_date || m.end_date >= new Date().toISOString().slice(0, 10),
   ).length;
+  const on_back = () => navigate("/");
+  const content: DashboardRouteContent = {
+    overview_data: {
+      route,
+      exams,
+      medications,
+      calendar,
+      displayed,
+      loading,
+      load_error,
+      uploading,
+      upload_progress,
+      exam_name,
+      notice,
+      search_query,
+      searching,
+      abnormal_count,
+      active_meds,
+      renaming_id,
+      rename_value,
+    },
+    overview_actions: {
+      on_upload: () => file_input_ref.current?.click(),
+      on_add_medication: () => {
+        set_editing_med(null);
+        set_modal_open(true);
+      },
+      on_exam_name_change: set_exam_name,
+      on_clear_search: () => set_search_query(""),
+      on_navigate: navigate,
+      on_show_calendar_exam: show_calendar_exam,
+      on_show_calendar_medication: show_calendar_medication,
+      on_submit_rename: submit_rename,
+      on_cancel_rename: () => set_renaming_id(null),
+      on_start_rename: (exam) => {
+        set_renaming_id(exam.id);
+        set_rename_value(exam.title);
+      },
+      on_rename_value_change: set_rename_value,
+      on_delete_exam: delete_exam,
+      on_open_exam_pdf: (id) => void open_exam_pdf(id),
+      on_edit_medication: (medication) => {
+        set_editing_med(medication);
+        set_modal_open(true);
+      },
+      on_delete_medication: async (medication) => {
+        try {
+          await api.delete_medication(medication.id);
+          await refresh();
+        } catch (err) {
+          set_notice({
+            kind: "err",
+            text: err instanceof Error ? err.message : "Delete failed.",
+          });
+        }
+      },
+    },
+    exams: {
+      exams,
+      on_back,
+      on_open_pdf: (id) => void open_exam_pdf(id),
+      on_select_exam: (exam) => show_calendar_exam(exam.id),
+      on_edit: set_rename_modal_exam,
+      on_deleted: async (id) => {
+        set_exams((current) => current.filter((exam) => exam.id !== id));
+        set_calendar((current) => ({
+          ...current,
+          exams: current.exams.filter((exam) => exam.id !== id),
+        }));
+        await refresh();
+      },
+      on_upload: () => file_input_ref.current?.click(),
+      uploading,
+      upload_progress,
+      notice,
+    },
+    medications: {
+      medications,
+      on_back,
+      on_changed: refresh,
+      on_deleted: async (id) => {
+        set_medications((current) => current.filter((medication) => medication.id !== id));
+        set_calendar((current) => ({
+          ...current,
+          medications: current.medications.filter((medication) => medication.id !== id),
+        }));
+        await refresh();
+      },
+    },
+    loading,
+    on_back,
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -334,119 +458,7 @@ export function DashboardView() {
         on_sign_out={sign_out}
       />
 
-      <DashboardOverview
-        data={{
-          route,
-          exams,
-          medications,
-          calendar,
-          displayed,
-          loading,
-          load_error,
-          uploading,
-          upload_progress,
-          exam_name,
-          notice,
-          search_query,
-          searching,
-          abnormal_count,
-          active_meds,
-          renaming_id,
-          rename_value,
-        }}
-        actions={{
-          on_upload: () => file_input_ref.current?.click(),
-          on_add_medication: () => {
-            set_editing_med(null);
-            set_modal_open(true);
-          },
-          on_exam_name_change: set_exam_name,
-          on_clear_search: () => set_search_query(""),
-          on_navigate: navigate,
-          on_show_calendar_exam: show_calendar_exam,
-          on_show_calendar_medication: show_calendar_medication,
-          on_submit_rename: submit_rename,
-          on_cancel_rename: () => set_renaming_id(null),
-          on_start_rename: (exam) => {
-            set_renaming_id(exam.id);
-            set_rename_value(exam.title);
-          },
-          on_rename_value_change: set_rename_value,
-          on_delete_exam: delete_exam,
-          on_open_exam_pdf: (id) => void open_exam_pdf(id),
-          on_edit_medication: (medication) => {
-            set_editing_med(medication);
-            set_modal_open(true);
-          },
-          on_delete_medication: async (medication) => {
-            try {
-              await api.delete_medication(medication.id);
-              await refresh();
-            } catch (err) {
-              set_notice({
-                kind: "err",
-                text: err instanceof Error ? err.message : "Delete failed.",
-              });
-            }
-          },
-        }}
-      />
-
-      {route === "/exams" && (
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {loading ? (
-            <div className="flex justify-center py-12"><Spinner className="h-8 w-8" /></div>
-          ) : (
-            <ExamsView
-              exams={exams}
-              on_back={() => navigate("/")}
-              on_open_pdf={(id) => void open_exam_pdf(id)}
-              on_select_exam={(exam) => show_calendar_exam(exam.id)}
-              on_edit={set_rename_modal_exam}
-              on_upload={() => file_input_ref.current?.click()}
-              uploading={uploading}
-              upload_progress={upload_progress}
-              notice={notice}
-              on_deleted={async (id) => {
-                set_exams((current) => current.filter((exam) => exam.id !== id));
-                set_calendar((current) => ({
-                  ...current,
-                  exams: current.exams.filter((exam) => exam.id !== id),
-                }));
-                await refresh();
-              }}
-            />
-          )}
-        </main>
-      )}
-
-      {route === "/medications" && (
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {loading ? (
-            <div className="flex justify-center py-12"><Spinner className="h-8 w-8" /></div>
-          ) : (
-            <MedicationsView
-              medications={medications}
-              on_back={() => navigate("/")}
-              on_changed={refresh}
-              on_deleted={async (id) => {
-                set_medications((current) => current.filter((med) => med.id !== id));
-                set_calendar((current) => ({
-                  ...current,
-                  medications: current.medications.filter((med) => med.id !== id),
-                }));
-                await refresh();
-              }}
-            />
-          )}
-        </main>
-      )}
-
-      {route === "/profile" && (
-        <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-          <ProfileView on_back={() => navigate("/")} />
-        </main>
-      )}
+      {children(content)}
 
       <MedicationModal
         open={modal_open}
@@ -461,6 +473,16 @@ export function DashboardView() {
         exam={rename_modal_exam}
         on_close={() => set_rename_modal_exam(null)}
         on_saved={refresh}
+      />
+      <ManualExamModal
+        exam={manual_exam}
+        on_close={keep_pdf_only}
+        on_keep_pdf={keep_pdf_only}
+        on_saved={(saved) => {
+          set_manual_exam(null);
+          set_notice({ kind: "ok", text: `“${saved.title}” saved with manual results.` });
+          void refresh();
+        }}
       />
       <CalendarItemModal
         item={calendar_item}
