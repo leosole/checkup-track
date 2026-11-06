@@ -4,6 +4,46 @@ Google-signed-in health dashboard that parses lab-report PDFs into structured
 biomarker data (via MarkItDown and user-configured LLM providers) and visualizes
 exams, medications, search, and multi-series time charts.
 
+## Product overview
+
+CheckUpTrack is a personal health-record dashboard for lab results. Instead of
+hunting through PDFs from different labs and years, you upload each report once
+and the app keeps every result in one place: a chronological exam history, a
+trend charts for your markers, your medication list, and a calendar that puts exams and
+medications on the same timeline.
+
+- **Upload and automatic extraction** — upload a lab-report PDF and the app
+  pulls out each biomarker with its value, unit, reference range, and
+  out-of-range flag. Extraction runs in the background, reports its progress,
+  and can be retried; a report that cannot be parsed can be saved with manually
+  entered results or kept as PDF only.
+- **Exam history** — recent exams on the dashboard, plus an exams screen with
+  search by exam or biomarker, out-of-range filtering, a date range, sorting,
+  inline rename, PDF download, and delete.
+- **Exam details** — a modal showing the exam date, results, and reference
+  ranges, with edit, download, and delete actions.
+- **Biomarker trends** — plot any number of markers against each other over
+  time. Search the marker picker, or click a marker on an exam card or in the
+  exam details to add it to the plot; plotted markers are marked in place and
+  remembered for your next visit. Abnormal points stand out, and hovering a
+  point shows its value, date, and source exam.
+- **Medications** — track name, dosage, doses per day, and start/end dates, with
+  an active-medication count on the dashboard.
+- **Calendar** — a month view of exams and medication periods; click any entry
+  to open its details.
+- **Sharing** — pick exams and medications and get a single-use code that
+  expires after 1–30 days and can be revoked at any time. The guest gets a
+  read-only view of exactly those records — results, medications, and the same
+  trends chart, with nothing editable — and re-sharing the same selection is
+  grouped instead of piling up duplicates.
+- **Account and privacy** — Google sign-in, per-user records, and LLM provider
+  keys encrypted at rest; you choose the providers and their failover order in
+  Profile.
+- Light and dark themes throughout, with a responsive layout that works on
+  phone-width screens.
+
+## Repository layout
+
 ```
 backend/    FastAPI + SQLModel + SQLite — decoupled, API-first JSON REST API
             (stateless JWT auth; usable by web and future Android clients)
@@ -101,6 +141,7 @@ All frontend files use lowercase-with-hyphens naming (`app.tsx`,
 | POST | `/api/shares/redeem` (single-use code → read-only guest JWT) | – |
 | GET | `/api/guest/data` | Guest JWT |
 | GET | `/api/guest/exams/{id}/pdf` | Guest JWT |
+| GET | `/api/guest/analytics/time-series?start_date&end_date&specs=A` (shared exams only) | Guest JWT |
 
 All responses are JSON; protected routes require
 `Authorization: Bearer <TOKEN>`.

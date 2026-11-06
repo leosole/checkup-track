@@ -11,6 +11,11 @@ import { Badge, Card, EmptyState, Spinner } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Logo } from "./logo";
+import { AnalyticsChart } from "./analytics-chart/analytics-chart";
+import {
+  GUEST_SELECTED_SPECS_KEY,
+  use_plot_markers,
+} from "./analytics-chart/marker-selection";
 
 function format_timestamp(value: string): string {
   const parsed = new Date(value);
@@ -29,6 +34,9 @@ export function GuestView() {
   const [code, set_code] = useState("");
   const [error, set_error] = useState<string | null>(null);
   const [submitting, set_submitting] = useState(false);
+  const { selected: plot_markers, toggle: toggle_plot_marker } = use_plot_markers(
+    GUEST_SELECTED_SPECS_KEY,
+  );
 
   const load = useCallback(async () => {
     set_loading(true);
@@ -215,6 +223,11 @@ export function GuestView() {
           <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
             Exams ({data.exams.length})
           </h2>
+          {data.exams.length > 0 && (
+            <p className="mb-3 text-xs text-gray-400 dark:text-gray-500">
+              Click a biomarker to add it to the trend plot.
+            </p>
+          )}
           {data.exams.length === 0 ? (
             <EmptyState
               title="No exams shared"
@@ -266,29 +279,73 @@ export function GuestView() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                          {exam.biomarkers.map((biomarker) => (
-                            <tr key={biomarker.id}>
-                              <th
-                                scope="row"
-                                className="px-2 py-2 font-medium text-gray-900 dark:text-white"
-                              >
-                                {biomarker.biomarker_name}
-                              </th>
-                              <td className="whitespace-nowrap px-2 py-2 text-gray-600 dark:text-gray-300">
-                                {biomarker.value} {biomarker.unit}
-                              </td>
-                              <td className="px-2 py-2 text-gray-600 dark:text-gray-300">
-                                {biomarker.reference_range || "—"}
-                              </td>
-                              <td className="px-2 py-2">
-                                <Badge
-                                  tone={biomarker.is_abnormal ? "danger" : "success"}
+                          {exam.biomarkers.map((biomarker) => {
+                            const plotted = plot_markers.includes(
+                              biomarker.biomarker_name,
+                            );
+                            return (
+                              <tr key={biomarker.id}>
+                                <th
+                                  scope="row"
+                                  className="px-2 py-1.5 font-medium text-gray-900 dark:text-white"
                                 >
-                                  {biomarker.is_abnormal ? "Out of range" : "In range"}
-                                </Badge>
-                              </td>
-                            </tr>
-                          ))}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      toggle_plot_marker(biomarker.biomarker_name)
+                                    }
+                                    aria-pressed={plotted}
+                                    aria-label={`${biomarker.biomarker_name}: ${
+                                      biomarker.value
+                                    } ${biomarker.unit}. ${
+                                      plotted ? "Remove from trend plot" : "Add to trend plot"
+                                    }`}
+                                    className="flex w-full items-center gap-2 rounded-md py-0.5 text-left transition hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 dark:hover:text-brand-300"
+                                  >
+                                    <span
+                                      aria-hidden="true"
+                                      className={[
+                                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                        plotted
+                                          ? "border-brand-600 bg-brand-600 text-white dark:border-brand-500 dark:bg-brand-500"
+                                          : "border-gray-300 dark:border-gray-600",
+                                      ].join(" ")}
+                                    >
+                                      {plotted && (
+                                        <svg
+                                          className="h-3 w-3"
+                                          viewBox="0 0 20 20"
+                                          fill="currentColor"
+                                        >
+                                          <path
+                                            fillRule="evenodd"
+                                            d="M16.704 5.29a1 1 0 010 1.415l-7.5 7.5a1 1 0 01-1.415 0l-3.5-3.5a1 1 0 011.415-1.415L8.5 12.085l6.79-6.795a1 1 0 011.414 0z"
+                                            clipRule="evenodd"
+                                          />
+                                        </svg>
+                                      )}
+                                    </span>
+                                    <span className="min-w-0 truncate">
+                                      {biomarker.biomarker_name}
+                                    </span>
+                                  </button>
+                                </th>
+                                <td className="whitespace-nowrap px-2 py-2 text-gray-600 dark:text-gray-300">
+                                  {biomarker.value} {biomarker.unit}
+                                </td>
+                                <td className="px-2 py-2 text-gray-600 dark:text-gray-300">
+                                  {biomarker.reference_range || "—"}
+                                </td>
+                                <td className="px-2 py-2">
+                                  <Badge
+                                    tone={biomarker.is_abnormal ? "danger" : "success"}
+                                  >
+                                    {biomarker.is_abnormal ? "Out of range" : "In range"}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -297,6 +354,15 @@ export function GuestView() {
               ))}
             </div>
           )}
+        </section>
+
+        <section>
+          <AnalyticsChart
+            exams={data.exams}
+            selected={plot_markers}
+            on_toggle_spec={toggle_plot_marker}
+            load_series={api.guest_time_series}
+          />
         </section>
 
         <section>

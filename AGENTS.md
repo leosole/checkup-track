@@ -154,7 +154,8 @@ JWT: `GET /api/auth/me`; `GET /api/profile/providers`,
 `GET /api/calendar`;
 `GET /api/analytics/time-series?specs=Glucose&specs=Hemoglobin&start_date=&end_date=`.
 Sharing: `POST|GET /api/shares`, `DELETE /api/shares/{id}` (revoke).
-Guest reads: `GET /api/guest/data`, `GET /api/guest/exams/{id}/pdf`.
+Guest reads: `GET /api/guest/data`, `GET /api/guest/exams/{id}/pdf`,
+`GET /api/guest/analytics/time-series?specs=` (scoped to the shared exams only).
 Routes keep the `/api/` prefix so the Vite proxy and the Render-hosted SPA work.
 
 Sharing rules: a share is one selection of owned exams/medications. Only the

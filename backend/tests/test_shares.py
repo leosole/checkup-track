@@ -12,6 +12,7 @@ import auth
 import main
 from models import (
     Exam,
+    ExamBiomarker,
     GuestCodeRequest,
     Medication,
     ShareCreate,
@@ -191,6 +192,55 @@ class ShareTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as raised:
             auth.get_current_user(credentials, self.session)
         self.assertEqual(raised.exception.status_code, 401)
+
+    def test_guest_trends_only_include_shared_exams(self) -> None:
+        self.session.add_all(
+            [
+                ExamBiomarker(
+                    exam_id=self.exam_a.id,
+                    biomarker_name="Glucose",
+                    value=5.4,
+                    unit="mmol/L",
+                    is_abnormal=False,
+                ),
+                ExamBiomarker(
+                    exam_id=self.exam_b.id,
+                    biomarker_name="Glucose",
+                    value=6.1,
+                    unit="mmol/L",
+                    is_abnormal=True,
+                ),
+                ExamBiomarker(
+                    exam_id=self.other_exam.id,
+                    biomarker_name="Glucose",
+                    value=9.9,
+                    unit="mmol/L",
+                    is_abnormal=True,
+                ),
+            ]
+        )
+        self.session.commit()
+
+        created = self.create([self.exam_a.id])
+        assert created.share.code is not None
+        guest = main.redeem_share_code(
+            GuestCodeRequest(code=created.share.code), self.session
+        )
+        share = auth.get_guest_share(
+            self.guest_credentials(guest.access_token), self.session
+        )
+
+        trends = main.guest_time_series(None, None, ["Glucose"], share, self.session)
+
+        self.assertEqual(len(trends.series), 1)
+        self.assertEqual(
+            [point.exam_title for point in trends.series[0].points], ["Panel A"]
+        )
+        self.assertEqual(trends.series[0].unit, "mmol/L")
+
+        with self.assertRaises(HTTPException) as raised:
+            main.guest_time_series(None, None, [], share, self.session)
+        self.assertEqual(raised.exception.status_code, 422)
 
     def test_identical_selections_share_a_group_and_reshares_raise_the_count(self) -> None:
         first = self.create([self.exam_a.id], [self.medication_a.id])

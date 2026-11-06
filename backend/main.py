@@ -12,7 +12,7 @@ import re
 import secrets
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from fastapi import (
     Depends,
@@ -766,32 +766,23 @@ def calendar(
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/analytics/time-series", response_model=TimeSeriesResponse, tags=["analytics"])
-def time_series(
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-    specs: List[str] = Query(default=[]),
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> TimeSeriesResponse:
-    """Group biomarker matches chronologically for the requested specs.
-
-    Query example: ``?start_date=2024-01-01&end_date=2025-12-31&specs=Glucose&specs=Hemoglobin``
-    """
-    specs = [s.strip() for s in specs if s and s.strip()]
-    if not specs:
+def _clean_specs(specs: List[str]) -> List[str]:
+    cleaned = [s.strip() for s in specs if s and s.strip()]
+    if not cleaned:
         raise HTTPException(
             status_code=422,
             detail="Provide at least one specs= query parameter.",
         )
+    return cleaned
 
-    rows = session.exec(
-        select(ExamBiomarker, Exam)
-        .join(Exam, ExamBiomarker.exam_id == Exam.id)
-        .where(Exam.user_id == user.id)
-        .order_by(Exam.date_performed)
-    ).all()
 
+def _build_time_series(
+    rows: Sequence[Tuple[ExamBiomarker, Exam]],
+    specs: List[str],
+    start_date: Optional[date],
+    end_date: Optional[date],
+) -> TimeSeriesResponse:
+    """Group already-scoped biomarker rows chronologically per requested spec."""
     series: List[TimeSeries] = []
     for spec in specs:
         spec_lower = spec.lower()
@@ -815,8 +806,31 @@ def time_series(
                 )
         points.sort(key=lambda p: p.date)
         series.append(TimeSeries(spec=spec, unit=unit, points=points))
-
     return TimeSeriesResponse(series=series)
+
+
+@app.get("/api/analytics/time-series", response_model=TimeSeriesResponse, tags=["analytics"])
+def time_series(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    specs: List[str] = Query(default=[]),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> TimeSeriesResponse:
+    """Group biomarker matches chronologically for the requested specs.
+
+    Query example: ``?start_date=2024-01-01&end_date=2025-12-31&specs=Glucose&specs=Hemoglobin``
+    """
+    specs = _clean_specs(specs)
+
+    rows = session.exec(
+        select(ExamBiomarker, Exam)
+        .join(Exam, ExamBiomarker.exam_id == Exam.id)
+        .where(Exam.user_id == user.id)
+        .order_by(Exam.date_performed)
+    ).all()
+
+    return _build_time_series(rows, specs, start_date, end_date)
 
 
 # ---------------------------------------------------------------------------
@@ -1240,6 +1254,37 @@ def guest_shared_data(
             for medication in medications
         ],
     )
+
+
+@app.get(
+    "/api/guest/analytics/time-series",
+    response_model=TimeSeriesResponse,
+    tags=["guest"],
+)
+def guest_time_series(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    specs: List[str] = Query(default=[]),
+    share: ShareGrant = Depends(get_guest_share),
+    session: Session = Depends(get_session),
+) -> TimeSeriesResponse:
+    """Read-only trends for the shared exams only.
+
+    Mirrors ``/api/analytics/time-series`` but is scoped to this code's
+    selection, so a guest can never plot records that were not shared.
+    """
+    specs = _clean_specs(specs)
+    exam_ids, _ = _share_selection(session, [share]).get(share.id, ([], []))
+    if not exam_ids:
+        return _build_time_series([], specs, start_date, end_date)
+
+    rows = session.exec(
+        select(ExamBiomarker, Exam)
+        .join(Exam, ExamBiomarker.exam_id == Exam.id)
+        .where(Exam.id.in_(exam_ids))
+        .order_by(Exam.date_performed)
+    ).all()
+    return _build_time_series(rows, specs, start_date, end_date)
 
 
 @app.get("/api/guest/exams/{exam_id}/pdf", tags=["guest"])

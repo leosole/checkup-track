@@ -32,6 +32,7 @@ export interface DashboardOverviewData {
   renaming_id: number | null;
   rename_value: string;
   retrying_exam_id: number | null;
+  plot_markers: string[];
 }
 
 export interface DashboardOverviewActions {
@@ -51,6 +52,7 @@ export interface DashboardOverviewActions {
   on_open_exam_pdf: (id: number) => void;
   on_edit_medication: (medication: Medication) => void;
   on_delete_medication: (medication: Medication) => void;
+  on_toggle_plot_marker: (name: string) => void;
 }
 
 function StatCard({
@@ -112,6 +114,7 @@ export function DashboardOverview({
     renaming_id,
     rename_value,
     retrying_exam_id,
+    plot_markers,
   } = data;
   const {
     on_upload,
@@ -130,6 +133,7 @@ export function DashboardOverview({
     on_open_exam_pdf,
     on_edit_medication,
     on_delete_medication,
+    on_toggle_plot_marker,
   } = actions;
 
   return (
@@ -216,6 +220,8 @@ export function DashboardOverview({
         searching={searching}
         renaming_id={renaming_id}
         rename_value={rename_value}
+        plot_markers={plot_markers}
+        on_toggle_marker={on_toggle_plot_marker}
         on_navigate={on_navigate}
         on_show_exam={on_show_calendar_exam}
         on_submit_rename={on_submit_rename}
@@ -237,7 +243,11 @@ export function DashboardOverview({
       </section>
 
       <section>
-        <AnalyticsChart exams={exams} />
+        <AnalyticsChart
+          exams={exams}
+          selected={plot_markers}
+          on_toggle_spec={on_toggle_plot_marker}
+        />
       </section>
 
       <DashboardMedicationSummary

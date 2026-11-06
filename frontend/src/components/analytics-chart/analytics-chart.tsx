@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type Exam, type TimeSeries } from "../../api-client";
+import { api, type TimeSeries, type TimeSeriesResponse } from "../../api-client";
 import { Badge, Card, EmptyState, Spinner } from "../ui/badge";
 import { AnalyticsChartControls } from "./controls";
 import {
@@ -10,28 +10,29 @@ import {
   type ChartGeometry,
 } from "./plot";
 
+/** The exam fields the chart needs; owner and guest exam shapes both fit. */
+export type ChartExam = {
+  date_performed: string;
+  biomarkers: { biomarker_name: string }[];
+};
+
+type SeriesLoader = (params: {
+  start_date: string;
+  end_date: string;
+  specs: string[];
+}) => Promise<TimeSeriesResponse>;
+
 interface AnalyticsChartProps {
-  exams: Exam[];
-}
-
-/** localStorage key for the markers the user last plotted. */
-const SELECTED_SPECS_KEY = "vitals.trends.markers";
-
-function read_saved_specs(): string[] {
-  try {
-    const raw = localStorage.getItem(SELECTED_SPECS_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((value): value is string => typeof value === "string")
-      : [];
-  } catch {
-    return [];
-  }
+  exams: ChartExam[];
+  /** Marker names currently plotted, shared with the exam cards and modal. */
+  selected: string[];
+  on_toggle_spec: (spec: string) => void;
+  /** Where series come from; guests pass the read-only guest endpoint. */
+  load_series?: SeriesLoader;
 }
 
 /** All unique biomarker names across loaded exams, for the spec picker. */
-function available_specs(exams: Exam[]): string[] {
+function available_specs(exams: ChartExam[]): string[] {
   const names = new Set<string>();
   for (const exam of exams) {
     for (const b of exam.biomarkers) {
@@ -60,25 +61,20 @@ function nice_ticks(min: number, max: number, count = 5): number[] {
   return ticks;
 }
 
-export function AnalyticsChart({ exams }: AnalyticsChartProps) {
+export function AnalyticsChart({
+  exams,
+  selected,
+  on_toggle_spec,
+  load_series = api.time_series,
+}: AnalyticsChartProps) {
   const wrap_ref = useRef<HTMLDivElement | null>(null);
 
   const specs = useMemo(() => available_specs(exams), [exams]);
-  const [selected, set_selected] = useState<string[]>(read_saved_specs);
   const [spec_filter, set_spec_filter] = useState("");
   const [series, set_series] = useState<TimeSeries[]>([]);
   const [loading, set_loading] = useState(false);
   const [error, set_error] = useState<string | null>(null);
   const [width, set_width] = useState(720);
-
-  // Remember the plotted markers so they come back on the next visit.
-  useEffect(() => {
-    try {
-      localStorage.setItem(SELECTED_SPECS_KEY, JSON.stringify(selected));
-    } catch {
-      // Storage full or disabled: the selection simply is not persisted.
-    }
-  }, [selected]);
 
   // Responsive width.
   useEffect(() => {
@@ -104,8 +100,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
     const dates = exams.map((e) => e.date_performed).sort();
     const start = dates[0] ?? new Date().toISOString().slice(0, 10);
     const end = dates[dates.length - 1] ?? new Date().toISOString().slice(0, 10);
-    api
-      .time_series({ start_date: start, end_date: end, specs: selected })
+    load_series({ start_date: start, end_date: end, specs: selected })
       .then((res) => {
         if (!cancelled) set_series(res.series);
       })
@@ -119,7 +114,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
+  }, [selected, load_series]);
 
   const visible = series.filter((s) => s.points.length > 0);
 
@@ -179,12 +174,6 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
     return { inner_w, inner_h, x_of, y_of, y_ticks, x_ticks, paths, has_data: all_points.length > 0 };
   }, [visible, width]);
 
-  function toggle_spec(spec: string) {
-    set_selected((prev) =>
-      prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec],
-    );
-  }
-
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -206,7 +195,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
         spec_filter={spec_filter}
         on_spec_filter_change={set_spec_filter}
         on_clear_filter={() => set_spec_filter("")}
-        on_toggle_spec={toggle_spec}
+        on_toggle_spec={on_toggle_spec}
         color_of={chart_color}
       />
 

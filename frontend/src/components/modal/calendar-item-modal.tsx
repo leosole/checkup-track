@@ -12,6 +12,8 @@ export function CalendarItemModal({
   item,
   error,
   busy,
+  plot_markers,
+  on_toggle_marker,
   on_close,
   on_edit,
   on_delete,
@@ -20,6 +22,8 @@ export function CalendarItemModal({
   item: CalendarSelection | null;
   error: string | null;
   busy: boolean;
+  plot_markers: string[];
+  on_toggle_marker: (name: string) => void;
   on_close: () => void;
   on_edit: () => void;
   on_delete: () => void;
@@ -87,32 +91,71 @@ export function CalendarItemModal({
             {item.exam.biomarkers.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">No biomarkers extracted.</p>
             ) : (
-              <ul className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
-                {item.exam.biomarkers.map((biomarker) => (
-                  <li key={biomarker.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                    <span
-                      className={[
-                        "min-w-0 truncate",
-                        biomarker.is_abnormal
-                          ? "text-rose-700 dark:text-rose-300"
-                          : "text-gray-700 dark:text-gray-300",
-                      ].join(" ")}
-                    >
-                      {biomarker.biomarker_name}
-                    </span>
-                    <span
-                      className={[
-                        "shrink-0",
-                        biomarker.is_abnormal
-                          ? "font-semibold text-rose-700 dark:text-rose-300"
-                          : "font-medium text-gray-900 dark:text-white",
-                      ].join(" ")}
-                    >
-                      {biomarker.value} {biomarker.unit}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">
+                  Click a result to add it to the trend plot.
+                </p>
+                <ul className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
+                  {item.exam.biomarkers.map((biomarker) => {
+                    const plotted = plot_markers.includes(biomarker.biomarker_name);
+                    return (
+                      <li key={biomarker.id}>
+                        <button
+                          type="button"
+                          onClick={() => on_toggle_marker(biomarker.biomarker_name)}
+                          aria-pressed={plotted}
+                          aria-label={`${biomarker.biomarker_name}: ${biomarker.value} ${
+                            biomarker.unit
+                          }. ${plotted ? "Remove from trend plot" : "Add to trend plot"}`}
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600 dark:hover:bg-gray-800/60"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span
+                              aria-hidden="true"
+                              className={[
+                                "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                plotted
+                                  ? "border-brand-600 bg-brand-600 text-white dark:border-brand-500 dark:bg-brand-500"
+                                  : "border-gray-300 dark:border-gray-600",
+                              ].join(" ")}
+                            >
+                              {plotted && (
+                                <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M16.704 5.29a1 1 0 010 1.415l-7.5 7.5a1 1 0 01-1.415 0l-3.5-3.5a1 1 0 011.415-1.415L8.5 12.085l6.79-6.795a1 1 0 011.414 0z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              )}
+                            </span>
+                            <span
+                              className={[
+                                "min-w-0 truncate",
+                                biomarker.is_abnormal
+                                  ? "text-rose-700 dark:text-rose-300"
+                                  : "text-gray-700 dark:text-gray-300",
+                              ].join(" ")}
+                            >
+                              {biomarker.biomarker_name}
+                            </span>
+                          </span>
+                          <span
+                            className={[
+                              "shrink-0",
+                              biomarker.is_abnormal
+                                ? "font-semibold text-rose-700 dark:text-rose-300"
+                                : "font-medium text-gray-900 dark:text-white",
+                            ].join(" ")}
+                          >
+                            {biomarker.value} {biomarker.unit}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
             )}
           </div>
         </div>

@@ -14,6 +14,8 @@ interface DashboardExamListProps {
   searching: boolean;
   renaming_id: number | null;
   rename_value: string;
+  plot_markers: string[];
+  on_toggle_marker: (name: string) => void;
   on_navigate: (route: DashboardRoute) => void;
   on_show_exam: (id: number) => void;
   on_submit_rename: (event: FormEvent<HTMLFormElement>, exam: Exam) => void;
@@ -34,6 +36,8 @@ export function DashboardExamList({
   searching,
   renaming_id,
   rename_value,
+  plot_markers,
+  on_toggle_marker,
   on_navigate,
   on_show_exam,
   on_submit_rename,
@@ -64,6 +68,12 @@ export function DashboardExamList({
           )}
         </div>
       </div>
+
+      {displayed.length > 0 && (
+        <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">
+          Click a marker to add it to the trend plot.
+        </p>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -188,39 +198,63 @@ export function DashboardExamList({
                     Results will appear here when extraction finishes.
                   </span>
                 )}
-                {exam.biomarkers.map((biomarker) => (
-                  <span
-                    key={biomarker.id}
-                    tabIndex={0}
-                    aria-label={
-                      biomarker.reference_range
-                        ? `${biomarker.biomarker_name}: normal range ${biomarker.reference_range}`
-                        : `${biomarker.biomarker_name}: no reference range`
-                    }
-                    className={[
-                      "group relative inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600",
-                      biomarker.is_abnormal
-                        ? "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30"
-                        : "bg-gray-50 text-gray-700 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700",
-                    ].join(" ")}
-                  >
-                    {biomarker.biomarker_name}
-                    <span className="font-semibold">
-                      {biomarker.value}{biomarker.unit ? ` ${biomarker.unit}` : ""}
-                    </span>
-                    {biomarker.is_abnormal && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                    )}
-                    <span
-                      role="tooltip"
-                      className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover:block group-focus-visible:block dark:bg-gray-700"
+                {exam.biomarkers.map((biomarker) => {
+                  const plotted = plot_markers.includes(biomarker.biomarker_name);
+                  const range_label = biomarker.reference_range
+                    ? `normal range ${biomarker.reference_range}`
+                    : "no reference range";
+                  return (
+                    <button
+                      key={biomarker.id}
+                      type="button"
+                      onClick={() => on_toggle_marker(biomarker.biomarker_name)}
+                      aria-pressed={plotted}
+                      aria-label={`${biomarker.biomarker_name}: ${biomarker.value}${
+                        biomarker.unit ? ` ${biomarker.unit}` : ""
+                      }, ${range_label}. ${
+                        plotted ? "Remove from trend plot" : "Add to trend plot"
+                      }`}
+                      className={[
+                        "group relative inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600",
+                        plotted
+                          ? "bg-brand-50 text-brand-700 ring-brand-400 dark:bg-brand-500/15 dark:text-brand-200 dark:ring-brand-500/50"
+                          : biomarker.is_abnormal
+                            ? "bg-rose-50 text-rose-700 ring-rose-200 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30 dark:hover:bg-rose-500/20"
+                            : "bg-gray-50 text-gray-700 ring-gray-200 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-gray-700",
+                      ].join(" ")}
                     >
-                      {biomarker.reference_range
-                        ? `Normal range: ${biomarker.reference_range}`
-                        : "No reference range"}
-                    </span>
-                  </span>
-                ))}
+                      {plotted && (
+                        <svg
+                          className="h-3 w-3 shrink-0"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.704 5.29a1 1 0 010 1.415l-7.5 7.5a1 1 0 01-1.415 0l-3.5-3.5a1 1 0 011.415-1.415L8.5 12.085l6.79-6.795a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                      {biomarker.biomarker_name}
+                      <span className="font-semibold">
+                        {biomarker.value}{biomarker.unit ? ` ${biomarker.unit}` : ""}
+                      </span>
+                      {biomarker.is_abnormal && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                      )}
+                      <span
+                        role="tooltip"
+                        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover:block group-focus-visible:block dark:bg-gray-700"
+                      >
+                        {biomarker.reference_range
+                          ? `Normal range: ${biomarker.reference_range}`
+                          : "No reference range"}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
               {exam.extraction_error && (

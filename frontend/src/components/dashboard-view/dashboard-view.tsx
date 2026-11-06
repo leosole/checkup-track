@@ -16,6 +16,7 @@ import {
 } from "../../api-client";
 import { use_auth } from "../../auth-context";
 import { apply_theme, init_theme, type Theme } from "../../theme";
+import { use_plot_markers } from "../analytics-chart/marker-selection";
 import { CalendarItemModal, type CalendarSelection } from "../modal/calendar-item-modal";
 import { ExamRenameModal } from "../modal/exam-rename-modal";
 import { ManualExamModal } from "../modal/manual-exam-modal";
@@ -86,6 +87,7 @@ export function DashboardLayout({
   const [renaming_id, set_renaming_id] = useState<number | null>(null);
   const [rename_value, set_rename_value] = useState("");
   const [theme, set_theme] = useState<Theme>(() => init_theme());
+  const { selected: plot_markers, toggle: toggle_plot_marker } = use_plot_markers();
   const file_input_ref = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(async () => {
@@ -203,6 +205,18 @@ export function DashboardLayout({
       set_calendar_item_error(null);
       set_calendar_item({ kind: "exam", exam });
     }
+  }
+
+  // Clicking a marker in any exam card or the exam modal toggles its series.
+  function toggle_marker(name: string) {
+    const plotted = plot_markers.includes(name);
+    toggle_plot_marker(name);
+    set_notice({
+      kind: "ok",
+      text: plotted
+        ? `“${name}” removed from the trend plot.`
+        : `“${name}” added to the trend plot.`,
+    });
   }
 
   function show_calendar_medication(medication_id: number) {
@@ -406,6 +420,7 @@ export function DashboardLayout({
       renaming_id,
       rename_value,
       retrying_exam_id,
+      plot_markers,
     },
     overview_actions: {
       on_upload: () => file_input_ref.current?.click(),
@@ -428,6 +443,7 @@ export function DashboardLayout({
       on_delete_exam: delete_exam,
       on_retry_exam: (id) => void retry_exam(id),
       on_open_exam_pdf: (id) => void open_exam_pdf(id),
+      on_toggle_plot_marker: toggle_marker,
       on_edit_medication: (medication) => {
         set_editing_med(medication);
         set_modal_open(true);
@@ -533,6 +549,8 @@ export function DashboardLayout({
         item={calendar_item}
         error={calendar_item_error}
         busy={calendar_action_busy}
+        plot_markers={plot_markers}
+        on_toggle_marker={toggle_marker}
         on_close={() => set_calendar_item(null)}
         on_edit={edit_calendar_item}
         on_delete={() => void delete_calendar_item()}

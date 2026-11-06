@@ -438,6 +438,25 @@ export const api = {
     return request(`/api/analytics/time-series?${search.toString()}`);
   },
 
+  guest_time_series(params: {
+    start_date: string;
+    end_date: string;
+    specs: string[];
+  }): Promise<TimeSeriesResponse> {
+    const search = new URLSearchParams();
+    search.set("start_date", params.start_date);
+    search.set("end_date", params.end_date);
+    for (const spec of params.specs) {
+      search.append("specs", spec);
+    }
+    // Read-only guest session: never attach the owner token here.
+    return request(
+      `/api/guest/analytics/time-series?${search.toString()}`,
+      {},
+      get_guest_token(),
+    );
+  },
+
   create_share(input: {
     exam_ids: number[];
     medication_ids: number[];
