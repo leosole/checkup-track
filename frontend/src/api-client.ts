@@ -3,10 +3,23 @@
  * Every protected call attaches `Authorization: Bearer <TOKEN>`.
  */
 
+export interface AccountCapabilities {
+  create_records: boolean;
+  delete_records: boolean;
+  edit_exam_metadata: boolean;
+  edit_medications: boolean;
+  edit_results: boolean;
+  manage_providers: boolean;
+  create_shares: boolean;
+  revoke_shares: boolean;
+  retry_extraction: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
   name: string;
+  capabilities: AccountCapabilities;
 }
 
 export type ProviderId =
@@ -265,8 +278,12 @@ async function request<T>(
 }
 
 export const api = {
-  auth_config(): Promise<{ google_client_id: string | null }> {
+  auth_config(): Promise<{ google_client_id: string | null; test_user_enabled: boolean }> {
     return request("/api/auth/config");
+  },
+
+  test_sign_in(): Promise<AuthResponse> {
+    return request("/api/auth/test", { method: "POST" });
   },
 
   google_sign_in(token: string): Promise<AuthResponse> {

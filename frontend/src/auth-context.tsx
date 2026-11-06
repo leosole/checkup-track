@@ -13,7 +13,9 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   google_client_id: string | null;
+  test_user_enabled: boolean;
   sign_in_with_credential: (credential: string) => Promise<void>;
+  sign_in_as_test_user: () => Promise<void>;
   sign_out: () => void;
 }
 
@@ -23,13 +25,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, set_user] = useState<User | null>(null);
   const [loading, set_loading] = useState(true);
   const [google_client_id, set_google_client_id] = useState<string | null>(null);
+  const [test_user_enabled, set_test_user_enabled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const config = await api.auth_config();
-        if (!cancelled) set_google_client_id(config.google_client_id);
+        if (!cancelled) {
+          set_google_client_id(config.google_client_id);
+          set_test_user_enabled(config.test_user_enabled);
+        }
       } catch {
         if (!cancelled) set_google_client_id(null);
       }
@@ -56,6 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     set_user(res.user);
   }, []);
 
+  const sign_in_as_test_user = useCallback(async () => {
+    const res = await api.test_sign_in();
+    set_token(res.access_token);
+    set_user(res.user);
+  }, []);
+
   const sign_out = useCallback(() => {
     set_token(null);
     set_user(null);
@@ -74,8 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, google_client_id, sign_in_with_credential, sign_out }),
-    [user, loading, google_client_id, sign_in_with_credential, sign_out],
+    () => ({ user, loading, google_client_id, test_user_enabled, sign_in_with_credential, sign_in_as_test_user, sign_out }),
+    [user, loading, google_client_id, test_user_enabled, sign_in_with_credential, sign_in_as_test_user, sign_out],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

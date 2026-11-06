@@ -21,6 +21,12 @@ from sqlmodel import Session
 
 from database import BASE_DIR, get_session
 from models import ShareGrant, User
+from test_user import (
+    TEST_TOKEN_SCOPE,
+    TEST_USER_ID,
+    account_capabilities,
+    test_user_enabled,
+)
 
 logger = logging.getLogger("auth")
 
@@ -104,6 +110,8 @@ def create_access_token(user_id: str) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)).timestamp()),
     }
+    if user_id == TEST_USER_ID:
+        payload["scope"] = TEST_TOKEN_SCOPE
     return jwt.encode(payload, _jwt_secret(), algorithm=ALGORITHM)
 
 
@@ -182,6 +190,18 @@ def get_current_user(
         )
 
     user_id = payload.get("sub")
+    scope = payload.get("scope")
+    is_test_user = user_id == TEST_USER_ID
+    if (
+        scope not in (None, TEST_TOKEN_SCOPE)
+        or (scope == TEST_TOKEN_SCOPE) != is_test_user
+        or (is_test_user and not test_user_enabled())
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This account session is not available. Sign in again.",
+            headers=unauthorized_headers,
+        )
     user = session.get(User, str(user_id)) if user_id else None
     if user is None:
         raise HTTPException(
@@ -190,6 +210,18 @@ def get_current_user(
             headers=unauthorized_headers,
         )
     return user
+
+
+def require_capability(action: str):
+    def authorized_user(user: User = Depends(get_current_user)) -> User:
+        if not getattr(account_capabilities(user), action, False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This action is not available for the test account.",
+            )
+        return user
+
+    return authorized_user
 
 
 def get_guest_share(

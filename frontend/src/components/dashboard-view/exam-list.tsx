@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import { format_date } from "../../date-utils";
 import type { Exam } from "../../api-client";
+import { use_auth } from "../../auth-context";
 import type { DashboardRoute } from "./types";
 import { Badge, Card, EmptyState, Spinner } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -49,6 +50,7 @@ export function DashboardExamList({
   retrying_exam_id,
   on_open_exam_pdf,
 }: DashboardExamListProps) {
+  const { user } = use_auth();
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
@@ -160,7 +162,7 @@ export function DashboardExamList({
                             <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
                           </svg>
                         </button>
-                        <button
+                        {user?.capabilities.delete_records && <button
                           type="button"
                           aria-label={`Delete ${exam.title}`}
                           title="Delete exam and PDF"
@@ -179,7 +181,7 @@ export function DashboardExamList({
                               clipRule="evenodd"
                             />
                           </svg>
-                        </button>
+                        </button>}
                       </div>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -334,7 +336,7 @@ export function DashboardExamList({
                     </svg>
                     Open PDF
                   </Button>
-                  {processing?.retry_allowed && (
+                  {user?.capabilities.retry_extraction && processing?.retry_allowed && (
                     <Button
                       variant="secondary"
                       size="sm"

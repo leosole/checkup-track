@@ -1,4 +1,5 @@
 import type { Exam, Medication } from "../../api-client";
+import { use_auth } from "../../auth-context";
 import { format_date } from "../../date-utils";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -29,6 +30,7 @@ export function CalendarItemModal({
   on_delete: () => void;
   on_download: () => void;
 }) {
+  const { user } = use_auth();
   const is_exam = item?.kind === "exam";
   const title =
     item?.kind === "exam"
@@ -58,9 +60,9 @@ export function CalendarItemModal({
                 Download PDF
               </Button>
             )}
-            <Button variant="danger" size="sm" disabled={busy} onClick={on_delete}>
+            {user?.capabilities.delete_records && <Button variant="danger" size="sm" disabled={busy} onClick={on_delete}>
               Delete
-            </Button>
+            </Button>}
           </div>
         )
       }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, type Medication } from "../api-client";
+import { use_auth } from "../auth-context";
 import { format_date } from "../date-utils";
 import { MedicationModal } from "./modal/medication-modal";
 import { Badge, EmptyState } from "./ui/badge";
@@ -19,6 +20,7 @@ export function MedicationsView({
   on_changed: () => Promise<void>;
   on_deleted: (id: number) => Promise<void>;
 }) {
+  const { user } = use_auth();
   const [query, set_query] = useState("");
   const [status, set_status] = useState<MedicationStatus>("all");
   const [start_from, set_start_from] = useState("");
@@ -58,6 +60,7 @@ export function MedicationsView({
     });
 
   async function delete_medication(medication: Medication) {
+    if (!user?.capabilities.delete_records) return;
     if (!window.confirm(`Delete "${medication.name}"? This cannot be undone.`)) {
       return;
     }
@@ -74,6 +77,7 @@ export function MedicationsView({
   }
 
   function open_medication(medication: Medication | null) {
+    if (!medication && !user?.capabilities.create_records) return;
     set_editing_med(medication);
     set_modal_open(true);
   }
@@ -103,7 +107,7 @@ export function MedicationsView({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => open_medication(null)}>Add medication</Button>
+          {user?.capabilities.create_records && <Button onClick={() => open_medication(null)}>Add medication</Button>}
         </div>
       </div>
 
@@ -238,7 +242,7 @@ export function MedicationsView({
                           <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
                         </svg>
                       </button>
-                      <button
+                      {user?.capabilities.delete_records && <button
                         type="button"
                         aria-label={`Delete ${medication.name}`}
                         title="Delete medication"
@@ -249,7 +253,7 @@ export function MedicationsView({
                         <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                           <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75V4H3.75a.75.75 0 000 1.5h.616l.74 10.5A2.75 2.75 0 007.846 18.5h4.308a2.75 2.75 0 002.744-2.5l.74-10.5h.616a.75.75 0 000-1.5H14v-.25A2.75 2.75 0 0011.25 1h-2.5zM7.5 4v.25c0 .69.56 1.25 1.25 1.25h2.5c.69 0 1.25-.56 1.25-1.25V4h-5zm1.5 4.5a.75.75 0 011.5 0v5a.75.75 0 01-1.5 0v-5zm3.75-.75a.75.75 0 000 1.5v5a.75.75 0 001.5 0v-5a.75.75 0 00-1.5 0z" clipRule="evenodd" />
                         </svg>
-                      </button>
+                      </button>}
                     </div>
                   </td>
                 </tr>
@@ -260,7 +264,7 @@ export function MedicationsView({
       )}
 
       <MedicationModal
-        open={modal_open}
+        open={modal_open && (editing_med !== null || Boolean(user?.capabilities.create_records))}
         med={editing_med}
         onClose={() => {
           set_modal_open(false);

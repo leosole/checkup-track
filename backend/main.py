@@ -43,6 +43,7 @@ from auth import (
     get_current_user,
     get_google_client_id,
     get_guest_share,
+    require_capability,
     upsert_user,
     verify_google_id_token,
 )
@@ -94,6 +95,13 @@ from models import (
     UserResponse,
 )
 from parser import enqueue_exam, search_exams
+from test_user import (
+    ensure_test_user,
+    prepare_test_share,
+    sample_pdf,
+    test_user_enabled,
+    user_response,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
@@ -159,7 +167,10 @@ def health() -> HealthResponse:
 @app.get("/api/auth/config", response_model=GoogleConfigResponse, tags=["auth"])
 def auth_config() -> GoogleConfigResponse:
     """Let the frontend learn the Google OAuth client ID."""
-    return GoogleConfigResponse(google_client_id=get_google_client_id())
+    return GoogleConfigResponse(
+        google_client_id=get_google_client_id(),
+        test_user_enabled=test_user_enabled(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -186,13 +197,21 @@ def google_sign_in(
     token = create_access_token(user.id)
     return AuthResponse(
         access_token=token,
-        user=UserResponse(id=user.id, email=user.email, name=user.name),
+        user=user_response(user),
     )
+
+
+@app.post("/api/auth/test", response_model=AuthResponse, tags=["auth"])
+def test_sign_in(session: Session = Depends(get_session)) -> AuthResponse:
+    if not test_user_enabled():
+        raise HTTPException(status_code=404, detail="Test-user login is not enabled.")
+    user = ensure_test_user(session)
+    return AuthResponse(access_token=create_access_token(user.id), user=user_response(user))
 
 
 @app.get("/api/auth/me", response_model=UserResponse, tags=["auth"])
 def me(user: User = Depends(get_current_user)) -> UserResponse:
-    return UserResponse(id=user.id, email=user.email, name=user.name)
+    return user_response(user)
 
 
 def _provider_statuses(
@@ -244,7 +263,7 @@ def list_provider_credentials(
 )
 def update_provider_order(
     payload: ProviderOrderUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("manage_providers")),
     session: Session = Depends(get_session),
 ) -> List[ProviderCredentialStatus]:
     providers = [provider.value for provider in payload.providers]
@@ -283,7 +302,7 @@ def update_provider_order(
 def save_provider_credential(
     provider: LLMProvider,
     payload: ProviderCredentialInput,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("manage_providers")),
     session: Session = Depends(get_session),
 ) -> List[ProviderCredentialStatus]:
     try:
@@ -313,7 +332,7 @@ def save_provider_credential(
 @app.delete("/api/profile/providers/{provider}", status_code=204, tags=["profile"])
 def delete_provider_credential(
     provider: LLMProvider,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("manage_providers")),
     session: Session = Depends(get_session),
 ) -> Response:
     row = session.exec(
@@ -386,7 +405,7 @@ def _exam_to_response(
 async def upload_exam(
     file: UploadFile = File(...),
     title: Optional[str] = Form(default=None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("create_records")),
 ) -> ExamResponse:
     """Accept and persist a PDF, then enqueue background extraction.
 
@@ -416,7 +435,7 @@ async def upload_exam(
 @app.post("/api/exams/{exam_id}/retry", response_model=ExamResponse, tags=["exams"])
 def retry_exam_extraction(
     exam_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("retry_extraction")),
     session: Session = Depends(get_session),
 ) -> ExamResponse:
     exam = session.get(Exam, exam_id)
@@ -457,7 +476,7 @@ def list_exams(
 def update_exam(
     exam_id: int,
     payload: ExamUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("edit_exam_metadata")),
     session: Session = Depends(get_session),
 ) -> ExamResponse:
     """Update an exam's name and/or the date it was performed.
@@ -481,7 +500,7 @@ def update_exam(
 def save_manual_exam_results(
     exam_id: int,
     payload: ManualExamInput,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("edit_results")),
     session: Session = Depends(get_session),
 ) -> ExamResponse:
     """Save manually entered exam details and results for an owned exam."""
@@ -518,7 +537,7 @@ def save_manual_exam_results(
 @app.delete("/api/exams/{exam_id}", tags=["exams"])
 def delete_exam(
     exam_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("delete_records")),
     session: Session = Depends(get_session),
 ) -> dict:
     """Delete an exam, its biomarkers, and its stored PDF."""
@@ -558,6 +577,9 @@ def delete_exam(
 def _read_exam_pdf(exam: Exam) -> bytes:
     """Return the stored PDF bytes from B2 or the local fallback file."""
     try:
+        fixture = sample_pdf(exam)
+        if fixture is not None:
+            return fixture
         if exam.pdf_path.startswith("exams/"):
             return object_storage.download_pdf(exam.pdf_path)
         local_path = object_storage.local_pdf_path(exam.pdf_path)
@@ -616,7 +638,7 @@ def search_exam_route(
 @app.post("/api/medications", response_model=MedicationResponse, tags=["medications"])
 def create_medication(
     payload: MedicationCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("create_records")),
     session: Session = Depends(get_session),
 ) -> MedicationResponse:
     if payload.end_date is not None and payload.end_date < payload.start_date:
@@ -676,7 +698,7 @@ def list_medications(
 def update_medication(
     medication_id: int,
     payload: MedicationUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("edit_medications")),
     session: Session = Depends(get_session),
 ) -> MedicationResponse:
     """Edit a medication in place; only the supplied fields change."""
@@ -717,7 +739,7 @@ def update_medication(
 @app.delete("/api/medications/{medication_id}", tags=["medications"])
 def delete_medication(
     medication_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("delete_records")),
     session: Session = Depends(get_session),
 ) -> dict:
     med = session.get(Medication, medication_id)
@@ -947,7 +969,7 @@ def _guest_share_info(session: Session, share: ShareGrant) -> GuestShareInfo:
 )
 def create_share(
     payload: ShareCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("create_shares")),
     session: Session = Depends(get_session),
 ) -> ShareCreatedResponse:
     """Mint a single-use code for the selected exams and medications.
@@ -983,6 +1005,8 @@ def create_share(
                 detail="Some of the selected medications were not found.",
             )
 
+    now = _utcnow()
+    prepare_test_share(session, user, now)
     code = ""
     for _ in range(5):
         candidate = _generate_share_code()
@@ -1000,7 +1024,6 @@ def create_share(
             detail="Could not generate a share code. Try again.",
         )
 
-    now = _utcnow()
     share = ShareGrant(
         owner_id=user.id,
         code_hash=_hash_share_code(code),
@@ -1118,7 +1141,7 @@ def list_share_groups(
 @app.delete("/api/shares/{share_id}", status_code=204, tags=["shares"])
 def revoke_share(
     share_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_capability("revoke_shares")),
     session: Session = Depends(get_session),
 ) -> Response:
     """Revoke one code; an already-redeemed guest session stops working too."""

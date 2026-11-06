@@ -19,6 +19,8 @@ services:
         value: "3.12.6"
       - key: SERVE_STATIC
         value: "1"
+      - key: TEST_USER_ENABLED
+        value: "1"
       - key: JWT_SECRET
         generateValue: true
       - key: CREDENTIAL_ENCRYPTION_KEY

@@ -7,6 +7,7 @@ import {
   type ShareGroup,
 } from "../api-client";
 import { format_date } from "../date-utils";
+import { use_auth } from "../auth-context";
 import { Badge, Card, EmptyState, Spinner } from "./ui/badge";
 import { Button } from "./ui/button";
 
@@ -54,6 +55,7 @@ export function ShareView({
   medications: Medication[];
   on_back: () => void;
 }) {
+  const { user } = use_auth();
   const [selected_exams, set_selected_exams] = useState<Set<number>>(new Set());
   const [selected_medications, set_selected_medications] = useState<Set<number>>(
     new Set(),
@@ -182,6 +184,7 @@ export function ShareView({
   }
 
   async function revoke(code_id: number) {
+    if (!user?.capabilities.revoke_shares) return;
     if (
       !window.confirm(
         "Revoke this code? Anyone using it loses access immediately. The records stay in your account.",
@@ -506,7 +509,7 @@ export function ShareView({
                       <span className="text-gray-400 dark:text-gray-500">
                         expires {format_timestamp(code.expires_at)}
                       </span>
-                      {(code.status === "active" || code.status === "used") && (
+                      {user?.capabilities.revoke_shares && (code.status === "active" || code.status === "used") && (
                         <button
                           type="button"
                           onClick={() => void revoke(code.id)}

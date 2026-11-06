@@ -70,6 +70,7 @@ Copy `env.example` and set:
 | --- | --- |
 | `CREDENTIAL_ENCRYPTION_KEY` | Stable, high-entropy secret used to encrypt user LLM keys at rest; do not rotate without re-encrypting saved keys |
 | `GOOGLE_CLIENT_ID` | Google OAuth 2.0 web client ID for ID-token verification |
+| `TEST_USER_ENABLED` | Set to `1` to enable public test-user login, disabled when unset or `0` |
 | `JWT_SECRET` | Signing secret for local JWTs (a dev secret is auto-generated when unset) |
 | `DATABASE_URL` | Postgres URL for production; SQLite (`backend/health.db`) is used when unset |
 | `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` | Backblaze B2 bucket for PDFs; local disk is used when unset |
@@ -79,6 +80,35 @@ Profile. Supported providers are Gemini, Groq, OpenAI, Claude, DeepSeek,
 Mistral, and OpenRouter. Keys are encrypted in the database, but the API
 decrypts them to make requests; the hosting operator can access them. A report
 may be sent to each provider attempted.
+
+### Test account
+
+Enable `TEST_USER_ENABLED=1` in the backend environment, then choose **Login as
+test user** on the sign-in screen. Google configuration, provider keys, and B2
+credentials are not required. For a local preview:
+
+```bash
+TEST_USER_ENABLED=1 sh scripts/preview.sh
+```
+
+- The first login creates three synthetic exams, nine biomarker results, and two
+  medications. Sample PDFs are bundled with the API.
+- All visitors use one shared account. Exam title/date and medication edits
+  persist and are visible to other visitors. Signing in again does not reset data.
+- Visitors can view, search, download PDFs, use charts/calendar, edit existing
+  metadata/medications, and create single-use shares.
+- Uploads, new exams/medications, deletion, biomarker edits, extraction retries,
+  provider changes, and share revocation are blocked by the API and hidden in the UI.
+- Only synthetic records belong in this public account. Do not enter personal
+  information in editable fields. Sharing exposes the selected records and their
+  subsequent edits until expiry.
+- The account supports at most 20 active codes and 100 unexpired codes including
+  redeemed codes. Further sharing returns HTTP 429 until capacity is available.
+  Expired test shares are removed when another share is created.
+- The Render Blueprint enables this account. For an existing service, set
+  `TEST_USER_ENABLED=1` in its Environment settings and redeploy. Set it to `0` and
+  restart to hide the login option and invalidate existing test-account sessions.
+  Already-redeemed guest sessions retain their original expiry.
 
 ### Production (Render Free)
 
@@ -124,6 +154,7 @@ All frontend files use lowercase-with-hyphens naming (`app.tsx`,
 | GET | `/health` | – |
 | GET | `/api/auth/config` | – |
 | POST | `/api/auth/google` | – (Google ID token → local JWT) |
+| POST | `/api/auth/test` | Public synthetic account, only when enabled |
 | GET | `/api/auth/me` | JWT |
 | GET | `/api/profile/providers` | JWT |
 | PUT/DELETE | `/api/profile/providers/{provider}` | JWT |

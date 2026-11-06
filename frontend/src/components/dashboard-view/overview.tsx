@@ -1,5 +1,6 @@
 import type { FormEvent } from "react";
 import type { CalendarData, Exam, Medication } from "../../api-client";
+import { use_auth } from "../../auth-context";
 import { AnalyticsChart } from "../analytics-chart/analytics-chart";
 import { CalendarGrid } from "../calendar-grid";
 import type { DashboardRoute } from "./types";
@@ -97,6 +98,7 @@ export function DashboardOverview({
   data: DashboardOverviewData;
   actions: DashboardOverviewActions;
 }) {
+  const { user } = use_auth();
   const {
     route,
     exams,
@@ -143,6 +145,7 @@ export function DashboardOverview({
       className={`mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 ${route !== "/" ? "hidden" : ""}`}
     >
       <div className="flex flex-wrap items-center gap-3">
+        {user?.capabilities.create_records && <>
         <input
           type="text"
           value={exam_name}
@@ -159,6 +162,7 @@ export function DashboardOverview({
         <Button variant="secondary" onClick={on_add_medication}>
           + Add medication
         </Button>
+        </>}
         <Button variant="secondary" onClick={() => on_navigate("/share")}>
           Share data
         </Button>
@@ -185,10 +189,10 @@ export function DashboardOverview({
           </button>
         )}
       </div>
-      <p className="-mt-1 text-xs text-gray-400 dark:text-gray-500">
+      {user?.capabilities.create_records && <p className="-mt-1 text-xs text-gray-400 dark:text-gray-500">
         Leave the exam name empty to use the report&apos;s own title, falling
         back to the PDF file name.
-      </p>
+      </p>}
 
       {load_error && (
         <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">

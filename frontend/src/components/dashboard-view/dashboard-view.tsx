@@ -249,7 +249,7 @@ export function DashboardLayout({
   }
 
   async function delete_calendar_item() {
-    if (!calendar_item) return;
+    if (!calendar_item || !user?.capabilities.delete_records) return;
     const item_name = calendar_item.kind === "exam"
       ? calendar_item.exam.title
       : calendar_item.medication.name;
@@ -303,7 +303,7 @@ export function DashboardLayout({
   async function handle_upload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!file || !user?.capabilities.create_records) return;
     set_uploading(true);
     set_upload_progress(0);
     set_notice(null);
@@ -354,6 +354,7 @@ export function DashboardLayout({
   }
 
   async function delete_exam(exam: Exam) {
+    if (!user?.capabilities.delete_records) return;
     if (!window.confirm(`Delete "${exam.title}" and its uploaded PDF? This cannot be undone.`)) {
       return;
     }
@@ -375,6 +376,7 @@ export function DashboardLayout({
   }
 
   async function retry_exam(id: number) {
+    if (!user?.capabilities.retry_extraction) return;
     set_retrying_exam_id(id);
     try {
       const updated = await api.retry_exam_extraction(id);
@@ -425,6 +427,7 @@ export function DashboardLayout({
     overview_actions: {
       on_upload: () => file_input_ref.current?.click(),
       on_add_medication: () => {
+        if (!user?.capabilities.create_records) return;
         set_editing_med(null);
         set_modal_open(true);
       },
@@ -449,6 +452,7 @@ export function DashboardLayout({
         set_modal_open(true);
       },
       on_delete_medication: async (medication) => {
+        if (!user?.capabilities.delete_records) return;
         try {
           await api.delete_medication(medication.id);
           await refresh();
@@ -500,13 +504,13 @@ export function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <input
+      {user?.capabilities.create_records && <input
         ref={file_input_ref}
         type="file"
         accept="application/pdf,.pdf"
         className="hidden"
         onChange={handle_upload}
-      />
+      />}
       <DashboardHeader
         user={user}
         route={route}
@@ -522,7 +526,7 @@ export function DashboardLayout({
       {children(content)}
 
       <MedicationModal
-        open={modal_open}
+        open={modal_open && (editing_med !== null || Boolean(user?.capabilities.create_records))}
         med={editing_med}
         onClose={() => {
           set_modal_open(false);
@@ -536,7 +540,7 @@ export function DashboardLayout({
         on_saved={refresh}
       />
       <ManualExamModal
-        exam={manual_exam}
+        exam={user?.capabilities.edit_results ? manual_exam : null}
         on_close={keep_pdf_only}
         on_keep_pdf={keep_pdf_only}
         on_saved={(saved) => {

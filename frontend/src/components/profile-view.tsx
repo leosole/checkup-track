@@ -6,6 +6,7 @@ import {
   type ProviderId,
 } from "../api-client";
 import { Badge, Spinner } from "./ui/badge";
+import { use_auth } from "../auth-context";
 import { Button } from "./ui/button";
 
 const PROVIDER_LABELS: Record<ProviderId, string> = {
@@ -19,6 +20,8 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
 };
 
 export function ProfileView({ on_back }: { on_back: () => void }) {
+  const { user } = use_auth();
+  const can_manage = Boolean(user?.capabilities.manage_providers);
   const [providers, set_providers] = useState<ProviderCredentialStatus[]>([]);
   const [api_keys, set_api_keys] = useState<Partial<Record<ProviderId, string>>>({});
   const [loading, set_loading] = useState(true);
@@ -47,6 +50,7 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
   }, []);
 
   async function save_key(provider: ProviderId) {
+    if (!can_manage) return;
     const api_key = api_keys[provider]?.trim();
     if (!api_key) return;
     set_busy_provider(provider);
@@ -64,6 +68,7 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
   }
 
   async function remove_key(provider: ProviderId) {
+    if (!can_manage) return;
     if (!window.confirm(`Remove the saved ${PROVIDER_LABELS[provider]} key?`)) return;
     set_busy_provider(provider);
     set_error(null);
@@ -84,6 +89,7 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
   }
 
   async function move_provider(provider: ProviderId, direction: -1 | 1) {
+    if (!can_manage) return;
     const current_index = providers.findIndex((item) => item.provider === provider);
     const target_index = current_index + direction;
     if (current_index < 0 || target_index < 0 || target_index >= providers.length) return;
@@ -133,11 +139,11 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
         </div>
       </div>
 
-      <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+      {can_manage && <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
         Keys are encrypted at rest. The API decrypts them to make requests, so the
         hosting operator can access them. A report may be sent to each provider
         attempted in the order below.
-      </p>
+      </p>}
 
       {error && (
         <p role="alert" className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
@@ -167,7 +173,7 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
                   <Badge tone={item.configured ? "success" : "gray"}>
                     {item.configured ? "Configured" : "Not configured"}
                   </Badge>
-                  <div className="ml-auto flex items-center gap-1">
+                  {can_manage && <div className="ml-auto flex items-center gap-1">
                     <button
                       type="button"
                       aria-label={`Move ${label} earlier`}
@@ -188,10 +194,10 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
                     >
                       <FiArrowDown aria-hidden="true" />
                     </button>
-                  </div>
+                  </div>}
                 </div>
 
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                {can_manage && <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <label className="min-w-0 flex-1">
                     <span className="sr-only">{label} API key</span>
                     <input
@@ -228,7 +234,7 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
                       <FiTrash2 aria-hidden="true" />
                     </button>
                   )}
-                </div>
+                </div>}
               </li>
             );
           })}

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { FiUser } from "react-icons/fi";
 import { use_auth } from "../auth-context";
 import { Spinner } from "./ui/badge";
+import { Button } from "./ui/button";
 import { Logo } from "./logo";
 
 /** Untitled UI-styled "Sign in with Google" screen. */
 export function SignInView() {
-  const { google_client_id, sign_in_with_credential, loading } = use_auth();
+  const { google_client_id, test_user_enabled, sign_in_with_credential, sign_in_as_test_user, loading } = use_auth();
   const button_ref = useRef<HTMLDivElement | null>(null);
   const [error, set_error] = useState<string | null>(null);
   const [submitting, set_submitting] = useState(false);
@@ -108,6 +110,28 @@ export function SignInView() {
               </div>
             ) : (
               <div ref={button_ref} className="min-h-[44px]" />
+            )}
+
+            {test_user_enabled && (
+              <Button
+                variant="secondary"
+                className="w-full max-w-[320px]"
+                disabled={loading || submitting}
+                onClick={async () => {
+                  set_submitting(true);
+                  set_error(null);
+                  try {
+                    await sign_in_as_test_user();
+                  } catch (err) {
+                    set_error(err instanceof Error ? err.message : "Test-user sign-in failed.");
+                  } finally {
+                    set_submitting(false);
+                  }
+                }}
+              >
+                <FiUser aria-hidden="true" className="h-4 w-4" />
+                Login as test user
+              </Button>
             )}
 
             {error && (

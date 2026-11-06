@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, type Exam } from "../api-client";
+import { use_auth } from "../auth-context";
 import { format_date } from "../date-utils";
 import { Badge, EmptyState } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -34,6 +35,7 @@ export function ExamsView({
   upload_progress: number;
   notice: { kind: "ok" | "err"; text: string } | null;
 }) {
+  const { user } = use_auth();
   const [query, set_query] = useState("");
   const [status, set_status] = useState<ExamStatus>("all");
   const [start_date, set_start_date] = useState("");
@@ -69,6 +71,7 @@ export function ExamsView({
     });
 
   async function delete_exam(exam: Exam) {
+    if (!user?.capabilities.delete_records) return;
     if (
       !window.confirm(
         `Delete "${exam.title}" and its uploaded PDF? This cannot be undone.`,
@@ -112,9 +115,9 @@ export function ExamsView({
             </p>
           </div>
         </div>
-        <Button onClick={on_upload} loading={uploading}>
+        {user?.capabilities.create_records && <Button onClick={on_upload} loading={uploading}>
           {uploading ? `Uploading PDF… ${upload_progress}%` : "Add exam"}
-        </Button>
+        </Button>}
       </div>
 
       {notice && (
@@ -286,7 +289,7 @@ export function ExamsView({
                         >
                           Open PDF
                         </Button>
-                        {processing?.retry_allowed && (
+                        {user?.capabilities.retry_extraction && processing?.retry_allowed && (
                           <Button
                             variant="secondary"
                             size="sm"
@@ -307,7 +310,7 @@ export function ExamsView({
                             <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
                           </svg>
                         </button>
-                        <button
+                        {user?.capabilities.delete_records && <button
                           type="button"
                           aria-label={`Delete ${exam.title}`}
                           title="Delete exam and PDF"
@@ -327,7 +330,7 @@ export function ExamsView({
                               clipRule="evenodd"
                             />
                           </svg>
-                        </button>
+                        </button>}
                       </div>
                     </td>
                   </tr>

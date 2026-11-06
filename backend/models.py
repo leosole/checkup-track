@@ -117,10 +117,23 @@ class GoogleAuthRequest(BaseModel):
     token: str
 
 
+class AccountCapabilities(BaseModel):
+    create_records: bool = True
+    delete_records: bool = True
+    edit_exam_metadata: bool = True
+    edit_medications: bool = True
+    edit_results: bool = True
+    manage_providers: bool = True
+    create_shares: bool = True
+    revoke_shares: bool = True
+    retry_extraction: bool = True
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+    capabilities: AccountCapabilities = PydanticField(default_factory=AccountCapabilities)
 
 
 class LLMProvider(str, Enum):
@@ -163,6 +176,7 @@ class AuthResponse(BaseModel):
 
 class GoogleConfigResponse(BaseModel):
     google_client_id: Optional[str] = None
+    test_user_enabled: bool = False
 
 
 class HealthResponse(BaseModel):
