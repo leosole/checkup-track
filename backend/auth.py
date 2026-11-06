@@ -20,12 +20,13 @@ from google.oauth2 import id_token as google_id_token
 from sqlmodel import Session
 
 from database import BASE_DIR, get_session
-from models import User
+from models import ShareGrant, User
 
 logger = logging.getLogger("auth")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
+GUEST_TOKEN_SCOPE = "guest"
 JWT_SECRET_FILE = BASE_DIR / ".jwt_secret"
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -106,6 +107,25 @@ def create_access_token(user_id: str) -> str:
     return jwt.encode(payload, _jwt_secret(), algorithm=ALGORITHM)
 
 
+def as_utc(value: datetime) -> datetime:
+    """Treat naive timestamps (SQLite) as UTC so comparisons never mix zones."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def create_guest_token(share_id: int, expires_at: datetime) -> str:
+    """Issue a read-only guest token that dies with the share it belongs to."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": f"share:{share_id}",
+        "scope": GUEST_TOKEN_SCOPE,
+        "iat": int(now.timestamp()),
+        "exp": int(as_utc(expires_at).timestamp()),
+    }
+    return jwt.encode(payload, _jwt_secret(), algorithm=ALGORITHM)
+
+
 def upsert_user(session: Session, claims: dict) -> User:
     """Create or refresh the local user row from Google claims."""
     user_id = claims["sub"]
@@ -154,6 +174,13 @@ def get_current_user(
             headers=unauthorized_headers,
         ) from exc
 
+    if payload.get("scope") == GUEST_TOKEN_SCOPE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Guest tokens cannot access account endpoints.",
+            headers=unauthorized_headers,
+        )
+
     user_id = payload.get("sub")
     user = session.get(User, str(user_id)) if user_id else None
     if user is None:
@@ -163,3 +190,77 @@ def get_current_user(
             headers=unauthorized_headers,
         )
     return user
+
+
+def get_guest_share(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+    session: Session = Depends(get_session),
+) -> ShareGrant:
+    """FastAPI dependency: require a valid guest token for a read-only share."""
+    unauthorized_headers = {"WWW-Authenticate": "Bearer"}
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This shared view is not signed in. Enter the share code again.",
+            headers=unauthorized_headers,
+        )
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            _jwt_secret(),
+            algorithms=[ALGORITHM],
+        )
+    except jwt.ExpiredSignatureError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This shared view has expired.",
+            headers=unauthorized_headers,
+        ) from exc
+    except jwt.PyJWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid shared view token.",
+            headers=unauthorized_headers,
+        ) from exc
+
+    if payload.get("scope") != GUEST_TOKEN_SCOPE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This shared view requires a guest code.",
+            headers=unauthorized_headers,
+        )
+
+    subject = str(payload.get("sub") or "")
+    share_id: Optional[int] = None
+    if subject.startswith("share:"):
+        try:
+            share_id = int(subject.split(":", 1)[1])
+        except ValueError:
+            share_id = None
+    if share_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid shared view token.",
+            headers=unauthorized_headers,
+        )
+
+    share = session.get(ShareGrant, share_id)
+    if share is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This shared view is no longer available.",
+            headers=unauthorized_headers,
+        )
+    if share.revoked_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="The owner revoked access to this shared view.",
+            headers=unauthorized_headers,
+        )
+    if as_utc(share.expires_at) <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This shared view has expired.",
+            headers=unauthorized_headers,
+        )
+    return share

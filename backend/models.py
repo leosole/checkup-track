@@ -70,6 +70,33 @@ class Medication(SQLModel, table=True):
     end_date: Optional[date] = None
 
 
+class ShareGrant(SQLModel, table=True):
+    """A single-use code that grants read-only access to selected records.
+
+    Only a hash of the code is stored, so the plaintext exists just once — in
+    the creation response. ``used_at`` marks the code as redeemed, and
+    ``revoked_at`` lets the owner end the guest's access early.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_id: str = Field(foreign_key="user.id", index=True)
+    code_hash: str = Field(index=True, unique=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime
+    used_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+
+
+class ShareExam(SQLModel, table=True):
+    share_id: int = Field(foreign_key="sharegrant.id", primary_key=True)
+    exam_id: int = Field(foreign_key="exam.id", primary_key=True)
+
+
+class ShareMedication(SQLModel, table=True):
+    share_id: int = Field(foreign_key="sharegrant.id", primary_key=True)
+    medication_id: int = Field(foreign_key="medication.id", primary_key=True)
+
+
 # ---------------------------------------------------------------------------
 # The strict LLM structured format
 # ---------------------------------------------------------------------------
@@ -286,3 +313,105 @@ class TimeSeries(BaseModel):
 
 class TimeSeriesResponse(BaseModel):
     series: List[TimeSeries] = []
+
+
+# ---------------------------------------------------------------------------
+# Sharing schemas
+# ---------------------------------------------------------------------------
+
+
+class ShareCreate(BaseModel):
+    """Records a user chose to share, plus how long the code stays usable."""
+
+    exam_ids: List[int] = PydanticField(default_factory=list, max_length=500)
+    medication_ids: List[int] = PydanticField(default_factory=list, max_length=500)
+    expires_in_days: int = PydanticField(default=7, ge=1, le=30)
+
+    @field_validator("exam_ids", "medication_ids")
+    @classmethod
+    def ids_must_be_positive(cls, value: List[int]) -> List[int]:
+        if any(item < 1 for item in value):
+            raise ValueError("Record ids must be positive integers.")
+        return value
+
+
+class ShareCodeResponse(BaseModel):
+    id: int
+    # Only present in the creation response; the code is stored hashed.
+    code: Optional[str] = None
+    created_at: datetime
+    expires_at: datetime
+    used_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    status: Literal["active", "used", "expired", "revoked"]
+
+
+class SharedExamSummary(BaseModel):
+    id: int
+    title: str
+    date_performed: date
+
+
+class SharedMedicationSummary(BaseModel):
+    id: int
+    name: str
+    dosage: str
+
+
+class ShareGroupResponse(BaseModel):
+    """Every code ever issued for one exact selection of records."""
+
+    group_key: str
+    exam_ids: List[int] = []
+    medication_ids: List[int] = []
+    exams: List[SharedExamSummary] = []
+    medications: List[SharedMedicationSummary] = []
+    times_shared: int
+    last_shared_at: datetime
+    active_codes: int
+    codes: List[ShareCodeResponse] = []
+
+
+class ShareCreatedResponse(BaseModel):
+    group_key: str
+    share: ShareCodeResponse
+
+
+class GuestShareInfo(BaseModel):
+    owner_name: str
+    expires_at: datetime
+    exam_count: int
+    medication_count: int
+
+
+class GuestExamResponse(BaseModel):
+    """Guest-facing exam view; deliberately omits stored file paths."""
+
+    id: int
+    title: str
+    date_performed: date
+    biomarkers: List[BiomarkerResponse] = []
+
+
+class GuestShareData(BaseModel):
+    share: GuestShareInfo
+    exams: List[GuestExamResponse] = []
+    medications: List[MedicationResponse] = []
+
+
+class GuestCodeRequest(BaseModel):
+    code: str = PydanticField(min_length=1, max_length=64)
+
+    @field_validator("code")
+    @classmethod
+    def code_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Enter the share code you received.")
+        return value
+
+
+class GuestAuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    share: GuestShareInfo

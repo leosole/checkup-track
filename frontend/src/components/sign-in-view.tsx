@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { use_auth } from "../auth-context";
 import { Spinner } from "./ui/badge";
 import { Logo } from "./logo";
@@ -130,7 +131,17 @@ export function SignInView() {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-gray-400 dark:text-gray-500">
+        <p className="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
+          Have a share code?{" "}
+          <Link
+            to="/guest"
+            className="font-semibold text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
+          >
+            View shared records
+          </Link>
+        </p>
+
+        <p className="mt-3 text-center text-xs text-gray-400 dark:text-gray-500">
           Protected by Google OAuth 2.0 · API-first for web and mobile clients
         </p>
       </div>

@@ -125,7 +125,77 @@ export interface TimeSeriesResponse {
   series: TimeSeries[];
 }
 
+export type ShareStatus = "active" | "used" | "expired" | "revoked";
+
+export interface ShareCode {
+  id: number;
+  code: string | null;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  revoked_at: string | null;
+  status: ShareStatus;
+}
+
+export interface SharedExamSummary {
+  id: number;
+  title: string;
+  date_performed: string;
+}
+
+export interface SharedMedicationSummary {
+  id: number;
+  name: string;
+  dosage: string;
+}
+
+export interface ShareGroup {
+  group_key: string;
+  exam_ids: number[];
+  medication_ids: number[];
+  exams: SharedExamSummary[];
+  medications: SharedMedicationSummary[];
+  times_shared: number;
+  last_shared_at: string;
+  active_codes: number;
+  codes: ShareCode[];
+}
+
+export interface ShareCreated {
+  group_key: string;
+  share: ShareCode;
+}
+
+export interface GuestShareInfo {
+  owner_name: string;
+  expires_at: string;
+  exam_count: number;
+  medication_count: number;
+}
+
+export interface GuestExam {
+  id: number;
+  title: string;
+  date_performed: string;
+  biomarkers: Biomarker[];
+}
+
+export interface GuestShareData {
+  share: GuestShareInfo;
+  exams: GuestExam[];
+  medications: Medication[];
+}
+
+export interface GuestAuthResponse {
+  access_token: string;
+  token_type: string;
+  share: GuestShareInfo;
+}
+
 const TOKEN_KEY = "vitals.jwt";
+// Guests get their own token so opening a share code never disturbs an owner
+// session (and vice versa).
+const GUEST_TOKEN_KEY = "vitals.guest.jwt";
 
 export function get_token(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -139,6 +209,18 @@ export function set_token(token: string | null): void {
   }
 }
 
+export function get_guest_token(): string | null {
+  return localStorage.getItem(GUEST_TOKEN_KEY);
+}
+
+export function set_guest_token(token: string | null): void {
+  if (token) {
+    localStorage.setItem(GUEST_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(GUEST_TOKEN_KEY);
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -147,9 +229,12 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  token: string | null = get_token(),
+): Promise<T> {
   const headers = new Headers(init.headers);
-  const token = get_token();
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -351,5 +436,49 @@ export const api = {
       search.append("specs", spec);
     }
     return request(`/api/analytics/time-series?${search.toString()}`);
+  },
+
+  create_share(input: {
+    exam_ids: number[];
+    medication_ids: number[];
+    expires_in_days?: number;
+  }): Promise<ShareCreated> {
+    return request("/api/shares", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  list_share_groups(): Promise<ShareGroup[]> {
+    return request("/api/shares");
+  },
+
+  revoke_share(id: number): Promise<void> {
+    return request(`/api/shares/${id}`, { method: "DELETE" });
+  },
+
+  redeem_share_code(code: string): Promise<GuestAuthResponse> {
+    // Public endpoint: never attach an owner token here.
+    return request(
+      "/api/shares/redeem",
+      { method: "POST", body: JSON.stringify({ code }) },
+      null,
+    );
+  },
+
+  guest_data(): Promise<GuestShareData> {
+    return request("/api/guest/data", {}, get_guest_token());
+  },
+
+  async guest_exam_pdf(id: number): Promise<Blob> {
+    const headers = new Headers();
+    const token = get_guest_token();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`/api/guest/exams/${id}/pdf`, { headers });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new ApiError(res.status, detail || `Could not open the PDF (${res.status})`);
+    }
+    return res.blob();
   },
 };

@@ -36,7 +36,8 @@ frontend/src/app.tsx    auth gate: SignInView when signed out, DashboardView whe
 frontend/src/api-client.ts  typed fetch wrapper; every protected call sends Bearer token
 frontend/src/auth-context.tsx  user bootstrap; JWT lives in localStorage (`vitals.jwt`)
 frontend/src/components/  dashboard-view, calendar-grid, analytics-chart,
-                          medication-modal, sign-in-view, ui/ primitives
+                          medication-modal, sign-in-view, share-view (owner),
+                          guest-view (public read-only), ui/ primitives
 scripts/preview.sh      starts uvicorn (8000) + vite (5173 by default) locally
 ```
 
@@ -142,7 +143,8 @@ Gemini, Groq, OpenAI, Claude, DeepSeek, Mistral, and OpenRouter.
 
 ## API map
 
-Public: `GET /health`, `GET /api/auth/config`, `POST /api/auth/google`.
+Public: `GET /health`, `GET /api/auth/config`, `POST /api/auth/google`,
+`POST /api/shares/redeem`.
 JWT: `GET /api/auth/me`; `GET /api/profile/providers`,
 `PUT /api/profile/providers/{provider}`, `DELETE /api/profile/providers/{provider}`,
 `PUT /api/profile/providers/order`; `POST /api/exams/upload` (multipart `file` + optional
@@ -151,13 +153,23 @@ JWT: `GET /api/auth/me`; `GET /api/profile/providers`,
 `POST|GET /api/medications`, `PATCH|DELETE /api/medications/{id}`;
 `GET /api/calendar`;
 `GET /api/analytics/time-series?specs=Glucose&specs=Hemoglobin&start_date=&end_date=`.
+Sharing: `POST|GET /api/shares`, `DELETE /api/shares/{id}` (revoke).
+Guest reads: `GET /api/guest/data`, `GET /api/guest/exams/{id}/pdf`.
 Routes keep the `/api/` prefix so the Vite proxy and the Render-hosted SPA work.
+
+Sharing rules: a share is one selection of owned exams/medications. Only the
+SHA-256 hash of its code is stored; the plaintext is returned once by
+`POST /api/shares`. A code redeems once (`POST /api/shares/redeem`) and yields a
+JWT with `scope="guest"`; `get_current_user` rejects that scope, so guest access
+is read-only by construction. `GET /api/shares` groups codes by their exact
+selection (`group_key`) and reports `times_shared`, which is what "share again"
+reuses. Identical selections are one group; changing the selection makes a new one.
 
 ## Verification
 
 Before calling work done:
 
-1. `cd backend && .venv/bin/python -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, user, userprovidercredential`.
+1. `cd backend && .venv/bin/python -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, shareexam, sharegrant, sharemedication, user, userprovidercredential`.
 2. `npm --prefix frontend run typecheck` (and `build` when touching UI).
 3. Smoke the changed endpoints against a running backend. Use a throwaway DB
    (e.g. `DATABASE_URL=sqlite:////tmp/smoke.db`) so you never pollute `backend/health.db`.

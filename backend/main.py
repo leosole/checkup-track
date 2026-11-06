@@ -5,12 +5,14 @@ Every response is JSON. All routes except ``/health`` and the Google
 sign-in/config routes require ``Authorization: Bearer <TOKEN>``.
 """
 
+import hashlib
 import logging
 import os
 import re
-from datetime import date, datetime, timezone
+import secrets
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import (
     Depends,
@@ -24,6 +26,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import update
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import FileResponse
@@ -34,9 +37,12 @@ import object_storage
 
 from auth import (
     AuthConfigError,
+    as_utc,
     create_access_token,
+    create_guest_token,
     get_current_user,
     get_google_client_id,
+    get_guest_share,
     upsert_user,
     verify_google_id_token,
 )
@@ -56,6 +62,11 @@ from models import (
     ExamResponse,
     GoogleAuthRequest,
     GoogleConfigResponse,
+    GuestAuthResponse,
+    GuestCodeRequest,
+    GuestExamResponse,
+    GuestShareData,
+    GuestShareInfo,
     HealthResponse,
     LLMProvider,
     ManualExamInput,
@@ -66,6 +77,15 @@ from models import (
     ProviderCredentialInput,
     ProviderCredentialStatus,
     ProviderOrderUpdate,
+    ShareCodeResponse,
+    ShareCreatedResponse,
+    ShareCreate,
+    ShareExam,
+    ShareGrant,
+    ShareGroupResponse,
+    ShareMedication,
+    SharedExamSummary,
+    SharedMedicationSummary,
     TimeSeries,
     TimeSeriesPoint,
     TimeSeriesResponse,
@@ -535,6 +555,37 @@ def delete_exam(
     return {"deleted": exam_id}
 
 
+def _read_exam_pdf(exam: Exam) -> bytes:
+    """Return the stored PDF bytes from B2 or the local fallback file."""
+    try:
+        if exam.pdf_path.startswith("exams/"):
+            return object_storage.download_pdf(exam.pdf_path)
+        local_path = object_storage.local_pdf_path(exam.pdf_path)
+        if not local_path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail="The stored PDF is no longer available.",
+            )
+        return local_path.read_bytes()
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 - storage failure is an upstream error
+        logger.exception("Could not read stored PDF %s", exam.pdf_path)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not read the stored PDF: {exc}",
+        ) from exc
+
+
+def _pdf_response(exam: Exam, pdf_bytes: bytes) -> Response:
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", exam.title).strip("._") or f"exam-{exam.id}"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{stem}.pdf"'},
+    )
+
+
 @app.get("/api/exams/{exam_id}/pdf", tags=["exams"])
 def download_exam_pdf(
     exam_id: int,
@@ -545,32 +596,7 @@ def download_exam_pdf(
     exam = session.get(Exam, exam_id)
     if exam is None or exam.user_id != user.id:
         raise HTTPException(status_code=404, detail="Exam not found.")
-    try:
-        if exam.pdf_path.startswith("exams/"):
-            pdf_bytes = object_storage.download_pdf(exam.pdf_path)
-        else:
-            local_path = object_storage.local_pdf_path(exam.pdf_path)
-            if not local_path.is_file():
-                raise HTTPException(
-                    status_code=404,
-                    detail="The stored PDF is no longer available.",
-                )
-            pdf_bytes = local_path.read_bytes()
-    except HTTPException:
-        raise
-    except Exception as exc:  # noqa: BLE001 - storage failure is an upstream error
-        logger.exception("Could not read stored PDF %s", exam.pdf_path)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not read the stored PDF: {exc}",
-        ) from exc
-
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", exam.title).strip("._") or f"exam-{exam.id}"
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{stem}.pdf"'},
-    )
+    return _pdf_response(exam, _read_exam_pdf(exam))
 
 
 @app.get("/api/exams/search", response_model=List[ExamResponse], tags=["exams"])
@@ -791,6 +817,444 @@ def time_series(
         series.append(TimeSeries(spec=spec, unit=unit, points=points))
 
     return TimeSeriesResponse(series=series)
+
+
+# ---------------------------------------------------------------------------
+# Sharing: single-use guest codes for selected records
+# ---------------------------------------------------------------------------
+
+SHARE_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+SHARE_CODE_LENGTH = 12
+SHARE_CODE_GROUP = 4
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _normalize_share_code(code: str) -> str:
+    """Accept codes typed with or without dashes and in any case."""
+    return re.sub(r"[^A-Z0-9]", "", code.upper())
+
+
+def _hash_share_code(code: str) -> str:
+    return hashlib.sha256(_normalize_share_code(code).encode("utf-8")).hexdigest()
+
+
+def _generate_share_code() -> str:
+    raw = "".join(
+        secrets.choice(SHARE_CODE_ALPHABET) for _ in range(SHARE_CODE_LENGTH)
+    )
+    return "-".join(
+        raw[index : index + SHARE_CODE_GROUP]
+        for index in range(0, SHARE_CODE_LENGTH, SHARE_CODE_GROUP)
+    )
+
+
+def _share_status(share: ShareGrant) -> str:
+    if share.revoked_at is not None:
+        return "revoked"
+    if share.used_at is not None:
+        return "used"
+    if as_utc(share.expires_at) <= _utcnow():
+        return "expired"
+    return "active"
+
+
+def _share_code_response(
+    share: ShareGrant,
+    code: Optional[str] = None,
+) -> ShareCodeResponse:
+    return ShareCodeResponse(
+        id=share.id,
+        code=code,
+        created_at=as_utc(share.created_at),
+        expires_at=as_utc(share.expires_at),
+        used_at=as_utc(share.used_at) if share.used_at else None,
+        revoked_at=as_utc(share.revoked_at) if share.revoked_at else None,
+        status=_share_status(share),
+    )
+
+
+def _share_group_key(exam_ids: List[int], medication_ids: List[int]) -> str:
+    """Stable identity of a selection, so identical re-shares group together."""
+    exams = ",".join(str(item) for item in sorted(exam_ids))
+    medications = ",".join(str(item) for item in sorted(medication_ids))
+    return f"exams={exams};medications={medications}"
+
+
+def _share_selection(
+    session: Session,
+    shares: List[ShareGrant],
+) -> Dict[int, Tuple[List[int], List[int]]]:
+    """Map each share id to the exam and medication ids recorded on it."""
+    if not shares:
+        return {}
+    share_ids = [share.id for share in shares]
+    exam_rows = session.exec(
+        select(ShareExam).where(ShareExam.share_id.in_(share_ids))
+    ).all()
+    medication_rows = session.exec(
+        select(ShareMedication).where(ShareMedication.share_id.in_(share_ids))
+    ).all()
+    exam_ids: Dict[int, List[int]] = {}
+    medication_ids: Dict[int, List[int]] = {}
+    for row in exam_rows:
+        exam_ids.setdefault(row.share_id, []).append(row.exam_id)
+    for row in medication_rows:
+        medication_ids.setdefault(row.share_id, []).append(row.medication_id)
+    return {
+        share.id: (
+            sorted(exam_ids.get(share.id, [])),
+            sorted(medication_ids.get(share.id, [])),
+        )
+        for share in shares
+    }
+
+
+def _guest_share_info(session: Session, share: ShareGrant) -> GuestShareInfo:
+    owner = session.get(User, share.owner_id)
+    exam_ids, medication_ids = _share_selection(session, [share]).get(
+        share.id, ([], [])
+    )
+    return GuestShareInfo(
+        owner_name=owner.name if owner else "the record owner",
+        expires_at=as_utc(share.expires_at),
+        exam_count=len(exam_ids),
+        medication_count=len(medication_ids),
+    )
+
+
+@app.post(
+    "/api/shares",
+    response_model=ShareCreatedResponse,
+    status_code=201,
+    tags=["shares"],
+)
+def create_share(
+    payload: ShareCreate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ShareCreatedResponse:
+    """Mint a single-use code for the selected exams and medications.
+
+    The plaintext code is returned exactly once; only its hash is stored.
+    """
+    exam_ids = sorted(set(payload.exam_ids))
+    medication_ids = sorted(set(payload.medication_ids))
+    if not exam_ids and not medication_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Select at least one exam or medication to share.",
+        )
+
+    if exam_ids:
+        owned_exams = session.exec(
+            select(Exam.id).where(Exam.user_id == user.id, Exam.id.in_(exam_ids))
+        ).all()
+        if sorted(owned_exams) != exam_ids:
+            raise HTTPException(
+                status_code=404,
+                detail="Some of the selected exams were not found.",
+            )
+    if medication_ids:
+        owned_medications = session.exec(
+            select(Medication.id).where(
+                Medication.user_id == user.id, Medication.id.in_(medication_ids)
+            )
+        ).all()
+        if sorted(owned_medications) != medication_ids:
+            raise HTTPException(
+                status_code=404,
+                detail="Some of the selected medications were not found.",
+            )
+
+    code = ""
+    for _ in range(5):
+        candidate = _generate_share_code()
+        exists = session.exec(
+            select(ShareGrant.id).where(
+                ShareGrant.code_hash == _hash_share_code(candidate)
+            )
+        ).first()
+        if exists is None:
+            code = candidate
+            break
+    if not code:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not generate a share code. Try again.",
+        )
+
+    now = _utcnow()
+    share = ShareGrant(
+        owner_id=user.id,
+        code_hash=_hash_share_code(code),
+        created_at=now,
+        expires_at=now + timedelta(days=payload.expires_in_days),
+    )
+    session.add(share)
+    session.commit()
+    session.refresh(share)
+    for exam_id in exam_ids:
+        session.add(ShareExam(share_id=share.id, exam_id=exam_id))
+    for medication_id in medication_ids:
+        session.add(ShareMedication(share_id=share.id, medication_id=medication_id))
+    session.commit()
+
+    logger.info(
+        "User %s shared %s exams and %s medications",
+        user.id,
+        len(exam_ids),
+        len(medication_ids),
+    )
+    return ShareCreatedResponse(
+        group_key=_share_group_key(exam_ids, medication_ids),
+        share=_share_code_response(share, code=code),
+    )
+
+
+@app.get("/api/shares", response_model=List[ShareGroupResponse], tags=["shares"])
+def list_share_groups(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> List[ShareGroupResponse]:
+    """List every selection the user has shared, grouped, with a share count."""
+    shares = session.exec(
+        select(ShareGrant)
+        .where(ShareGrant.owner_id == user.id)
+        .order_by(ShareGrant.created_at.desc())
+    ).all()
+    if not shares:
+        return []
+
+    selection = _share_selection(session, shares)
+    exams_by_id = {
+        exam.id: exam
+        for exam in session.exec(select(Exam).where(Exam.user_id == user.id)).all()
+    }
+    medications_by_id = {
+        medication.id: medication
+        for medication in session.exec(
+            select(Medication).where(Medication.user_id == user.id)
+        ).all()
+    }
+
+    groups: Dict[str, Dict[str, object]] = {}
+    for share in shares:
+        exam_ids, medication_ids = selection.get(share.id, ([], []))
+        # Records deleted since sharing simply drop out of the group.
+        remaining_exams = [item for item in exam_ids if item in exams_by_id]
+        remaining_medications = [
+            item for item in medication_ids if item in medications_by_id
+        ]
+        if not remaining_exams and not remaining_medications:
+            continue
+        key = _share_group_key(remaining_exams, remaining_medications)
+        group = groups.setdefault(
+            key,
+            {
+                "exam_ids": remaining_exams,
+                "medication_ids": remaining_medications,
+                "shares": [],
+            },
+        )
+        group["shares"].append(share)  # type: ignore[union-attr]
+
+    result: List[ShareGroupResponse] = []
+    for key, group in groups.items():
+        exam_ids = group["exam_ids"]
+        medication_ids = group["medication_ids"]
+        group_shares: List[ShareGrant] = group["shares"]  # type: ignore[assignment]
+        group_shares.sort(key=lambda item: as_utc(item.created_at), reverse=True)
+        result.append(
+            ShareGroupResponse(
+                group_key=key,
+                exam_ids=exam_ids,  # type: ignore[arg-type]
+                medication_ids=medication_ids,  # type: ignore[arg-type]
+                exams=[
+                    SharedExamSummary(
+                        id=item,
+                        title=exams_by_id[item].title,
+                        date_performed=exams_by_id[item].date_performed,
+                    )
+                    for item in exam_ids  # type: ignore[union-attr]
+                ],
+                medications=[
+                    SharedMedicationSummary(
+                        id=item,
+                        name=medications_by_id[item].name,
+                        dosage=medications_by_id[item].dosage,
+                    )
+                    for item in medication_ids  # type: ignore[union-attr]
+                ],
+                times_shared=len(group_shares),
+                last_shared_at=as_utc(group_shares[0].created_at),
+                active_codes=sum(
+                    1 for item in group_shares if _share_status(item) == "active"
+                ),
+                codes=[_share_code_response(item) for item in group_shares],
+            )
+        )
+
+    result.sort(key=lambda item: item.last_shared_at, reverse=True)
+    return result
+
+
+@app.delete("/api/shares/{share_id}", status_code=204, tags=["shares"])
+def revoke_share(
+    share_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Revoke one code; an already-redeemed guest session stops working too."""
+    share = session.get(ShareGrant, share_id)
+    if share is None or share.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Share not found.")
+    if share.revoked_at is None:
+        share.revoked_at = _utcnow()
+        session.add(share)
+        session.commit()
+    return Response(status_code=204)
+
+
+@app.post(
+    "/api/shares/redeem",
+    response_model=GuestAuthResponse,
+    tags=["shares"],
+)
+def redeem_share_code(
+    payload: GuestCodeRequest,
+    session: Session = Depends(get_session),
+) -> GuestAuthResponse:
+    """Exchange a single-use code for a read-only guest session."""
+    share = session.exec(
+        select(ShareGrant).where(
+            ShareGrant.code_hash == _hash_share_code(payload.code)
+        )
+    ).first()
+    if share is None:
+        raise HTTPException(status_code=401, detail="That share code is not valid.")
+    if share.revoked_at is not None:
+        raise HTTPException(
+            status_code=403, detail="The owner revoked this share code."
+        )
+    if share.used_at is not None:
+        raise HTTPException(
+            status_code=403,
+            detail="This share code has already been used. Ask for a new one.",
+        )
+    if as_utc(share.expires_at) <= _utcnow():
+        raise HTTPException(
+            status_code=403,
+            detail="This share code has expired. Ask for a new one.",
+        )
+
+    # Atomic claim so two simultaneous redemptions cannot both succeed.
+    claimed = session.exec(
+        update(ShareGrant)
+        .where(ShareGrant.id == share.id, ShareGrant.used_at.is_(None))
+        .values(used_at=_utcnow())
+    )
+    session.commit()
+    if claimed.rowcount != 1:
+        raise HTTPException(
+            status_code=403,
+            detail="This share code has already been used. Ask for a new one.",
+        )
+    session.refresh(share)
+
+    logger.info("Share %s redeemed", share.id)
+    return GuestAuthResponse(
+        access_token=create_guest_token(share.id, share.expires_at),
+        share=_guest_share_info(session, share),
+    )
+
+
+@app.get("/api/guest/data", response_model=GuestShareData, tags=["guest"])
+def guest_shared_data(
+    share: ShareGrant = Depends(get_guest_share),
+    session: Session = Depends(get_session),
+) -> GuestShareData:
+    """Read-only payload: only the records this code was issued for."""
+    exam_ids, medication_ids = _share_selection(session, [share]).get(
+        share.id, ([], [])
+    )
+
+    exams: List[Exam] = []
+    biomarkers_by_exam: Dict[int, List[ExamBiomarker]] = {}
+    if exam_ids:
+        exams = session.exec(
+            select(Exam)
+            .where(Exam.id.in_(exam_ids))
+            .order_by(Exam.date_performed.desc())
+        ).all()
+        biomarkers = session.exec(
+            select(ExamBiomarker).where(
+                ExamBiomarker.exam_id.in_([exam.id for exam in exams])
+            )
+        ).all()
+        for biomarker in biomarkers:
+            biomarkers_by_exam.setdefault(biomarker.exam_id, []).append(biomarker)
+
+    medications = (
+        session.exec(
+            select(Medication)
+            .where(Medication.id.in_(medication_ids))
+            .order_by(Medication.start_date.desc())
+        ).all()
+        if medication_ids
+        else []
+    )
+
+    return GuestShareData(
+        share=_guest_share_info(session, share),
+        exams=[
+            GuestExamResponse(
+                id=exam.id,
+                title=exam.title,
+                date_performed=exam.date_performed,
+                biomarkers=[
+                    BiomarkerResponse(
+                        id=biomarker.id,
+                        biomarker_name=biomarker.biomarker_name,
+                        value=biomarker.value,
+                        unit=biomarker.unit,
+                        reference_range=biomarker.reference_range,
+                        is_abnormal=biomarker.is_abnormal,
+                    )
+                    for biomarker in biomarkers_by_exam.get(exam.id, [])
+                ],
+            )
+            for exam in exams
+        ],
+        medications=[
+            MedicationResponse(
+                id=medication.id,
+                name=medication.name,
+                dosage=medication.dosage,
+                frequency_per_day=medication.frequency_per_day,
+                start_date=medication.start_date,
+                end_date=medication.end_date,
+            )
+            for medication in medications
+        ],
+    )
+
+
+@app.get("/api/guest/exams/{exam_id}/pdf", tags=["guest"])
+def guest_exam_pdf(
+    exam_id: int,
+    share: ShareGrant = Depends(get_guest_share),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Stream a PDF only when it belongs to one of the shared exams."""
+    if session.get(ShareExam, (share.id, exam_id)) is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    exam = session.get(Exam, exam_id)
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    return _pdf_response(exam, _read_exam_pdf(exam))
 
 
 # ---------------------------------------------------------------------------

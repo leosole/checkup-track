@@ -7,7 +7,12 @@ function Root() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { user, loading } = use_auth();
 
-  if (pathname === "/privacy-policy" || pathname === "/terms-of-service") {
+  // Legal pages and the guest share screen are reachable without an account.
+  if (
+    pathname === "/guest" ||
+    pathname === "/privacy-policy" ||
+    pathname === "/terms-of-service"
+  ) {
     return <Outlet />;
   }
 

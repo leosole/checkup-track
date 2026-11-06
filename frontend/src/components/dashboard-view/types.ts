@@ -1,1 +1,6 @@
-export type DashboardRoute = "/" | "/exams" | "/medications" | "/profile";
+export type DashboardRoute =
+  | "/"
+  | "/exams"
+  | "/medications"
+  | "/profile"
+  | "/share";

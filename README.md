@@ -96,6 +96,15 @@ All frontend files use lowercase-with-hyphens naming (`app.tsx`,
 | POST/GET/PATCH/DELETE | `/api/medications` | JWT |
 | GET | `/api/calendar` | JWT |
 | GET | `/api/analytics/time-series?start_date&end_date&specs=A&specs=B` | JWT |
+| POST/GET | `/api/shares` (create returns the only copy of the code; list is grouped) | JWT |
+| DELETE | `/api/shares/{id}` (revoke a code) | JWT |
+| POST | `/api/shares/redeem` (single-use code → read-only guest JWT) | – |
+| GET | `/api/guest/data` | Guest JWT |
+| GET | `/api/guest/exams/{id}/pdf` | Guest JWT |
 
 All responses are JSON; protected routes require
 `Authorization: Bearer <TOKEN>`.
+
+Sharing lets a user send one code for a chosen set of exams and medications. The
+guest opens `/guest`, redeems the code once, and gets a read-only view; guest
+tokens carry `scope="guest"` and are rejected by every owner route.

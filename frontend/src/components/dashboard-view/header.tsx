@@ -107,8 +107,15 @@ export function DashboardHeader({
                 </p>
                 <button
                   type="button"
-                  onClick={() => on_navigate("/profile")}
+                  onClick={() => on_navigate("/share")}
                   className="mt-2 w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  Share data
+                </button>
+                <button
+                  type="button"
+                  onClick={() => on_navigate("/profile")}
+                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
                 >
                   Profile
                 </button>

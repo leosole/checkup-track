@@ -99,6 +99,9 @@ def init_db() -> None:
         ExamBiomarker,
         ExamProcessingJob,
         Medication,
+        ShareExam,
+        ShareGrant,
+        ShareMedication,
         User,
         UserProviderCredential,
     )

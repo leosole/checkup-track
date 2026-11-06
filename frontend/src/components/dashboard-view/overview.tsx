@@ -151,6 +151,9 @@ export function DashboardOverview({
         <Button variant="secondary" onClick={on_add_medication}>
           + Add medication
         </Button>
+        <Button variant="secondary" onClick={() => on_navigate("/share")}>
+          Share data
+        </Button>
         {notice && (
           <p
             className={[
