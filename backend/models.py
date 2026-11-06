@@ -202,8 +202,21 @@ class MedicationUpdate(BaseModel):
     end_date: Optional[date] = None
 
 
-class ExamRename(BaseModel):
-    title: str = PydanticField(min_length=1, max_length=200)
+class ExamUpdate(BaseModel):
+    """Partial exam update: omitted fields keep their current value."""
+
+    title: Optional[str] = PydanticField(default=None, min_length=1, max_length=200)
+    date_performed: Optional[date] = None
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("Exam title must not be blank.")
+        return value
 
 
 class ManualBiomarkerInput(BaseModel):

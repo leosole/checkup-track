@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type Exam, type TimeSeries } from "../../api-client";
 import { Badge, Card, EmptyState, Spinner } from "../ui/badge";
 import { AnalyticsChartControls } from "./controls";
@@ -12,6 +12,22 @@ import {
 
 interface AnalyticsChartProps {
   exams: Exam[];
+}
+
+/** localStorage key for the markers the user last plotted. */
+const SELECTED_SPECS_KEY = "vitals.trends.markers";
+
+function read_saved_specs(): string[] {
+  try {
+    const raw = localStorage.getItem(SELECTED_SPECS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 /** All unique biomarker names across loaded exams, for the spec picker. */
@@ -48,21 +64,21 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
   const wrap_ref = useRef<HTMLDivElement | null>(null);
 
   const specs = useMemo(() => available_specs(exams), [exams]);
-  const [selected, set_selected] = useState<string[]>([]);
-  const [custom_spec, set_custom_spec] = useState("");
+  const [selected, set_selected] = useState<string[]>(read_saved_specs);
   const [spec_filter, set_spec_filter] = useState("");
   const [series, set_series] = useState<TimeSeries[]>([]);
   const [loading, set_loading] = useState(false);
   const [error, set_error] = useState<string | null>(null);
   const [width, set_width] = useState(720);
 
-  // Auto-select the first two specs once when specs appear.
+  // Remember the plotted markers so they come back on the next visit.
   useEffect(() => {
-    if (selected.length === 0 && specs.length > 0) {
-      set_selected(specs.slice(0, 2));
+    try {
+      localStorage.setItem(SELECTED_SPECS_KEY, JSON.stringify(selected));
+    } catch {
+      // Storage full or disabled: the selection simply is not persisted.
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specs]);
+  }, [selected]);
 
   // Responsive width.
   useEffect(() => {
@@ -169,15 +185,6 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
     );
   }
 
-  function add_custom_spec(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const value = custom_spec.trim();
-    if (value && !selected.includes(value)) {
-      set_selected((prev) => [...prev, value]);
-    }
-    set_custom_spec("");
-  }
-
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -197,12 +204,9 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
         filtered_specs={filtered_specs}
         selected={selected}
         spec_filter={spec_filter}
-        custom_spec={custom_spec}
         on_spec_filter_change={set_spec_filter}
         on_clear_filter={() => set_spec_filter("")}
         on_toggle_spec={toggle_spec}
-        on_custom_spec_change={set_custom_spec}
-        on_add_custom_spec={add_custom_spec}
         color_of={chart_color}
       />
 
@@ -221,7 +225,7 @@ export function AnalyticsChart({ exams }: AnalyticsChartProps) {
         {!loading && !error && visible.length === 0 && (
           <EmptyState
             title="No series selected"
-            hint="Pick one or more biomarker specs above to plot your medical history timeline."
+            hint="Search for a biomarker above and pick the markers you want to plot over time."
           />
         )}
         {visible.length > 0 && (

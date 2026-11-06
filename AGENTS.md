@@ -146,7 +146,7 @@ Public: `GET /health`, `GET /api/auth/config`, `POST /api/auth/google`.
 JWT: `GET /api/auth/me`; `GET /api/profile/providers`,
 `PUT /api/profile/providers/{provider}`, `DELETE /api/profile/providers/{provider}`,
 `PUT /api/profile/providers/order`; `POST /api/exams/upload` (multipart `file` + optional
-`title`, ≤ 25 MB); `GET /api/exams`; `PATCH /api/exams/{id}` (rename);
+`title`, ≤ 25 MB); `GET /api/exams`; `PATCH /api/exams/{id}` (rename / change date);
 `GET /api/exams/{id}/pdf` (streams the stored PDF); `GET /api/exams/search?q=`;
 `POST|GET /api/medications`, `PATCH|DELETE /api/medications/{id}`;
 `GET /api/calendar`;

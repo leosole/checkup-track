@@ -87,13 +87,27 @@ export function CalendarItemModal({
             {item.exam.biomarkers.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">No biomarkers extracted.</p>
             ) : (
-              <ul className="max-h-48 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
+              <ul className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
                 {item.exam.biomarkers.map((biomarker) => (
                   <li key={biomarker.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                    <span className="min-w-0 truncate text-gray-700 dark:text-gray-300">
+                    <span
+                      className={[
+                        "min-w-0 truncate",
+                        biomarker.is_abnormal
+                          ? "text-rose-700 dark:text-rose-300"
+                          : "text-gray-700 dark:text-gray-300",
+                      ].join(" ")}
+                    >
                       {biomarker.biomarker_name}
                     </span>
-                    <span className="shrink-0 font-medium text-gray-900 dark:text-white">
+                    <span
+                      className={[
+                        "shrink-0",
+                        biomarker.is_abnormal
+                          ? "font-semibold text-rose-700 dark:text-rose-300"
+                          : "font-medium text-gray-900 dark:text-white",
+                      ].join(" ")}
+                    >
                       {biomarker.value} {biomarker.unit}
                     </span>
                   </li>

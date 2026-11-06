@@ -191,13 +191,14 @@ export function DashboardExamList({
                 {exam.biomarkers.map((biomarker) => (
                   <span
                     key={biomarker.id}
-                    title={
+                    tabIndex={0}
+                    aria-label={
                       biomarker.reference_range
-                        ? `Reference: ${biomarker.reference_range}`
-                        : "No reference range"
+                        ? `${biomarker.biomarker_name}: normal range ${biomarker.reference_range}`
+                        : `${biomarker.biomarker_name}: no reference range`
                     }
                     className={[
-                      "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
+                      "group relative inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600",
                       biomarker.is_abnormal
                         ? "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30"
                         : "bg-gray-50 text-gray-700 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700",
@@ -210,6 +211,14 @@ export function DashboardExamList({
                     {biomarker.is_abnormal && (
                       <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                     )}
+                    <span
+                      role="tooltip"
+                      className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover:block group-focus-visible:block dark:bg-gray-700"
+                    >
+                      {biomarker.reference_range
+                        ? `Normal range: ${biomarker.reference_range}`
+                        : "No reference range"}
+                    </span>
                   </span>
                 ))}
               </div>

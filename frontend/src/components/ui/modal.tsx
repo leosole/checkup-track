@@ -31,8 +31,8 @@ export function Modal({ open, title, subtitle, onClose, children, footer }: Moda
       aria-modal="true"
       aria-label={title}
     >
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-untitled-lg sm:p-8 dark:bg-gray-900 dark:shadow-none dark:ring-1 dark:ring-white/10">
-        <div className="flex items-start justify-between gap-4">
+      <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl bg-white p-6 shadow-untitled-lg sm:p-8 dark:bg-gray-900 dark:shadow-none dark:ring-1 dark:ring-white/10">
+        <div className="flex shrink-0 items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>
             {subtitle && (
@@ -50,8 +50,8 @@ export function Modal({ open, title, subtitle, onClose, children, footer }: Moda
             </svg>
           </button>
         </div>
-        <div className="mt-5">{children}</div>
-        {footer && <div className="mt-6 flex justify-end gap-3">{footer}</div>}
+        <div className="mt-5 min-h-0 flex-1 overflow-y-auto">{children}</div>
+        {footer && <div className="mt-6 flex shrink-0 justify-end gap-3">{footer}</div>}
       </div>
     </div>
   );

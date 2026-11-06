@@ -14,26 +14,31 @@ export function ExamRenameModal({
   on_saved: () => Promise<void>;
 }) {
   const [title, set_title] = useState("");
+  const [date_performed, set_date_performed] = useState("");
   const [saving, set_saving] = useState(false);
   const [error, set_error] = useState<string | null>(null);
 
   useEffect(() => {
     if (!exam) return;
     set_title(exam.title);
+    set_date_performed(exam.date_performed);
     set_error(null);
   }, [exam]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!exam || !title.trim()) return;
+    if (!exam || !title.trim() || !date_performed) return;
     set_saving(true);
     set_error(null);
     try {
-      await api.rename_exam(exam.id, title.trim());
+      await api.update_exam(exam.id, {
+        title: title.trim(),
+        date_performed,
+      });
       await on_saved();
       on_close();
     } catch (err) {
-      set_error(err instanceof Error ? err.message : "Could not rename the exam.");
+      set_error(err instanceof Error ? err.message : "Could not update the exam.");
     } finally {
       set_saving(false);
     }
@@ -43,7 +48,7 @@ export function ExamRenameModal({
     <Modal
       open={exam !== null}
       title="Edit exam"
-      subtitle="Update the name shown across your dashboard and calendar."
+      subtitle="Update the name and the date this exam was performed."
       onClose={on_close}
       footer={
         <>
@@ -67,6 +72,13 @@ export function ExamRenameModal({
           value={title}
           onChange={(event) => set_title(event.target.value)}
           maxLength={200}
+          required
+        />
+        <Input
+          label="Date performed"
+          type="date"
+          value={date_performed}
+          onChange={(event) => set_date_performed(event.target.value)}
           required
         />
       </form>

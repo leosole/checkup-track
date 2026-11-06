@@ -52,7 +52,7 @@ from models import (
     Exam,
     ExamBiomarker,
     ExamProcessingJob,
-    ExamRename,
+    ExamUpdate,
     ExamResponse,
     GoogleAuthRequest,
     GoogleConfigResponse,
@@ -434,17 +434,23 @@ def list_exams(
 
 
 @app.patch("/api/exams/{exam_id}", response_model=ExamResponse, tags=["exams"])
-def rename_exam(
+def update_exam(
     exam_id: int,
-    payload: ExamRename,
+    payload: ExamUpdate,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> ExamResponse:
-    """Rename an exam (a blank name is rejected; omit the call instead)."""
+    """Update an exam's name and/or the date it was performed.
+
+    Both fields are optional; omitted fields keep their current value.
+    """
     exam = session.get(Exam, exam_id)
     if exam is None or exam.user_id != user.id:
         raise HTTPException(status_code=404, detail="Exam not found.")
-    exam.title = payload.title.strip()
+    if payload.title is not None:
+        exam.title = payload.title
+    if payload.date_performed is not None:
+        exam.date_performed = payload.date_performed
     session.add(exam)
     session.commit()
     session.refresh(exam)

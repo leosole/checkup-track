@@ -21,22 +21,22 @@ export function DashboardMedicationSummary({
 }: DashboardMedicationSummaryProps) {
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          Medications
-        </h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            Medications
+          </h2>
           <Button variant="secondary" size="sm" onClick={on_add}>
             + Add
           </Button>
-          <button
-            type="button"
-            onClick={() => on_navigate("/medications")}
-            className="text-sm font-semibold text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
-          >
-            View more
-          </button>
         </div>
+        <button
+          type="button"
+          onClick={() => on_navigate("/medications")}
+          className="text-sm font-semibold text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
+        >
+          View more
+        </button>
       </div>
       {medications.length === 0 ? (
         <EmptyState

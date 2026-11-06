@@ -289,10 +289,13 @@ export const api = {
     return res.blob();
   },
 
-  rename_exam(id: number, title: string): Promise<Exam> {
+  update_exam(
+    id: number,
+    input: { title?: string; date_performed?: string },
+  ): Promise<Exam> {
     return request(`/api/exams/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(input),
     });
   },
 

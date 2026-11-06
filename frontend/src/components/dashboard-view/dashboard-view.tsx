@@ -328,7 +328,7 @@ export function DashboardLayout({
       return;
     }
     try {
-      await api.rename_exam(exam.id, value);
+      await api.update_exam(exam.id, { title: value });
       set_renaming_id(null);
       await refresh();
     } catch (err) {
