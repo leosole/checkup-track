@@ -278,7 +278,10 @@ async function request<T>(
 }
 
 export const api = {
-  auth_config(): Promise<{ google_client_id: string | null; test_user_enabled: boolean }> {
+  auth_config(): Promise<{
+    google_client_id: string | null;
+    test_user_enabled: boolean;
+  }> {
     return request("/api/auth/config");
   },
 
@@ -352,7 +355,8 @@ export const api = {
           on_progress?.(Math.round((event.loaded / event.total) * 100));
         }
       };
-      request.onerror = () => reject(new ApiError(0, "Upload connection failed."));
+      request.onerror = () =>
+        reject(new ApiError(0, "Upload connection failed."));
       request.onabort = () => reject(new ApiError(0, "Upload was cancelled."));
       request.onload = () => {
         let data: unknown = null;
@@ -386,7 +390,10 @@ export const api = {
     const res = await fetch(`/api/exams/${id}/pdf`, { headers });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      throw new ApiError(res.status, detail || `Could not open the PDF (${res.status})`);
+      throw new ApiError(
+        res.status,
+        detail || `Could not open the PDF (${res.status})`,
+      );
     }
     return res.blob();
   },
@@ -513,7 +520,10 @@ export const api = {
     const res = await fetch(`/api/guest/exams/${id}/pdf`, { headers });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      throw new ApiError(res.status, detail || `Could not open the PDF (${res.status})`);
+      throw new ApiError(
+        res.status,
+        detail || `Could not open the PDF (${res.status})`,
+      );
     }
     return res.blob();
   },

@@ -8,7 +8,13 @@ import { Logo } from "./logo";
 
 /** Untitled UI-styled "Sign in with Google" screen. */
 export function SignInView() {
-  const { google_client_id, test_user_enabled, sign_in_with_credential, sign_in_as_test_user, loading } = use_auth();
+  const {
+    google_client_id,
+    test_user_enabled,
+    sign_in_with_credential,
+    sign_in_as_test_user,
+    loading,
+  } = use_auth();
   const button_ref = useRef<HTMLDivElement | null>(null);
   const [error, set_error] = useState<string | null>(null);
   const [submitting, set_submitting] = useState(false);
@@ -47,7 +53,9 @@ export function SignInView() {
             await sign_in_with_credential(response.credential);
           } catch (err) {
             set_error(
-              err instanceof Error ? err.message : "Sign-in failed on the server.",
+              err instanceof Error
+                ? err.message
+                : "Sign-in failed on the server.",
             );
           } finally {
             set_submitting(false);
@@ -100,9 +108,12 @@ export function SignInView() {
 
             {!google_client_id && !loading ? (
               <div className="w-full rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">
-                <p className="font-semibold">Google sign-in is not configured</p>
+                <p className="font-semibold">
+                  Google sign-in is not configured
+                </p>
                 <p className="mt-1">
-                  Set <code className="rounded bg-amber-100 px-1 dark:bg-amber-500/20">
+                  Set{" "}
+                  <code className="rounded bg-amber-100 px-1 dark:bg-amber-500/20">
                     GOOGLE_CLIENT_ID
                   </code>{" "}
                   in the backend environment, then restart.
@@ -123,7 +134,11 @@ export function SignInView() {
                   try {
                     await sign_in_as_test_user();
                   } catch (err) {
-                    set_error(err instanceof Error ? err.message : "Test-user sign-in failed.");
+                    set_error(
+                      err instanceof Error
+                        ? err.message
+                        : "Test-user sign-in failed.",
+                    );
                   } finally {
                     set_submitting(false);
                   }
@@ -148,8 +163,12 @@ export function SignInView() {
               ["Plan", "Manage meds"],
             ].map(([title, sub]) => (
               <div key={title}>
-                <p className="text-xs font-semibold text-brand-700 dark:text-brand-300">{title}</p>
-                <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{sub}</p>
+                <p className="text-xs font-semibold text-brand-700 dark:text-brand-300">
+                  {title}
+                </p>
+                <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                  {sub}
+                </p>
               </div>
             ))}
           </div>

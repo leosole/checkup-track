@@ -57,14 +57,16 @@ export function ShareView({
 }) {
   const { user } = use_auth();
   const [selected_exams, set_selected_exams] = useState<Set<number>>(new Set());
-  const [selected_medications, set_selected_medications] = useState<Set<number>>(
-    new Set(),
-  );
+  const [selected_medications, set_selected_medications] = useState<
+    Set<number>
+  >(new Set());
   const [expires_in_days, set_expires_in_days] = useState(7);
   const [groups, set_groups] = useState<ShareGroup[]>([]);
   const [loading_groups, set_loading_groups] = useState(true);
   const [creating, set_creating] = useState(false);
-  const [sharing_group_key, set_sharing_group_key] = useState<string | null>(null);
+  const [sharing_group_key, set_sharing_group_key] = useState<string | null>(
+    null,
+  );
   const [revoking_id, set_revoking_id] = useState<number | null>(null);
   const [created, set_created] = useState<ShareCreated | null>(null);
   const [copied, set_copied] = useState<"code" | "link" | null>(null);
@@ -75,7 +77,9 @@ export function ShareView({
       set_groups(await api.list_share_groups());
       set_error(null);
     } catch (err) {
-      set_error(err instanceof Error ? err.message : "Could not load shared items.");
+      set_error(
+        err instanceof Error ? err.message : "Could not load shared items.",
+      );
     } finally {
       set_loading_groups(false);
     }
@@ -112,7 +116,10 @@ export function ShareView({
     exams.length > 0 && selected_exams.size === exams.length;
   const all_medications_selected =
     medications.length > 0 && selected_medications.size === medications.length;
-  const total_codes = groups.reduce((sum, group) => sum + group.codes.length, 0);
+  const total_codes = groups.reduce(
+    (sum, group) => sum + group.codes.length,
+    0,
+  );
 
   function toggle_exam(id: number) {
     set_selected_exams((current) => {
@@ -159,7 +166,9 @@ export function ShareView({
       set_created(result);
       await load_groups();
     } catch (err) {
-      set_error(err instanceof Error ? err.message : "Could not create a share code.");
+      set_error(
+        err instanceof Error ? err.message : "Could not create a share code.",
+      );
     } finally {
       set_creating(false);
     }
@@ -177,7 +186,9 @@ export function ShareView({
       set_created(result);
       await load_groups();
     } catch (err) {
-      set_error(err instanceof Error ? err.message : "Could not create a share code.");
+      set_error(
+        err instanceof Error ? err.message : "Could not create a share code.",
+      );
     } finally {
       set_sharing_group_key(null);
     }
@@ -198,7 +209,9 @@ export function ShareView({
       await api.revoke_share(code_id);
       await load_groups();
     } catch (err) {
-      set_error(err instanceof Error ? err.message : "Could not revoke this code.");
+      set_error(
+        err instanceof Error ? err.message : "Could not revoke this code.",
+      );
     } finally {
       set_revoking_id(null);
     }
@@ -211,7 +224,9 @@ export function ShareView({
       set_copied(target);
       window.setTimeout(() => set_copied(null), 2000);
     } catch {
-      set_error("Could not copy to the clipboard. Select the text and copy it manually.");
+      set_error(
+        "Could not copy to the clipboard. Select the text and copy it manually.",
+      );
     }
   }
 
@@ -225,7 +240,12 @@ export function ShareView({
           onClick={on_back}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
         >
-          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <svg
+            className="h-5 w-5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
             <path
               fillRule="evenodd"
               d="M17 10a.75.75 0 01-.75.75H5.56l3.22 3.22a.75.75 0 11-1.06 1.06l-4.5-4.5a.75.75 0 010-1.06l4.5-4.5a.75.75 0 111.06 1.06l-3.22 3.22h10.69A.75.75 0 0117 10z"
@@ -238,7 +258,8 @@ export function ShareView({
             Share your records
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Pick the exams and medications to share, then send the one-time code.
+            Pick the exams and medications to share, then send the one-time
+            code.
           </p>
         </div>
       </div>
@@ -263,8 +284,8 @@ export function ShareView({
                 {created.share.code}
               </p>
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Expires {format_timestamp(created.share.expires_at)} · single use ·
-                read-only
+                Expires {format_timestamp(created.share.expires_at)} · single
+                use · read-only
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -282,15 +303,19 @@ export function ShareView({
               >
                 {copied === "link" ? "Copied" : "Copy guest link"}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => set_created(null)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => set_created(null)}
+              >
                 Dismiss
               </Button>
             </div>
           </div>
           <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-gray-800/60 dark:text-gray-300">
             Send the code, or this link:{" "}
-            <span className="font-mono text-xs">{guest_url()}</span>. The code is shown
-            only once and works for a single guest.
+            <span className="font-mono text-xs">{guest_url()}</span>. The code
+            is shown only once and works for a single guest.
           </p>
         </Card>
       )}
@@ -388,7 +413,8 @@ export function ShareView({
                         {medication.name}
                       </span>
                       <span className="block text-xs text-gray-500 dark:text-gray-400">
-                        {medication.dosage} · {medication.frequency_per_day}x per day
+                        {medication.dosage} · {medication.frequency_per_day}x
+                        per day
                       </span>
                     </span>
                   </label>
@@ -406,7 +432,9 @@ export function ShareView({
           </span>
           <select
             value={expires_in_days}
-            onChange={(event) => set_expires_in_days(Number(event.target.value))}
+            onChange={(event) =>
+              set_expires_in_days(Number(event.target.value))
+            }
             className={SELECT_CLASS}
           >
             {EXPIRY_OPTIONS.map((days) => (
@@ -424,7 +452,8 @@ export function ShareView({
           Create one-time code
         </Button>
         <p className="pb-1 text-xs text-gray-500 dark:text-gray-400">
-          A code can be redeemed once and only allows viewing the selected records.
+          A code can be redeemed once and only allows viewing the selected
+          records.
         </p>
       </Card>
 
@@ -435,8 +464,8 @@ export function ShareView({
               Previously shared
             </h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Each group is one selection of records. Sharing it again issues a new
-              code for the same selection.
+              Each group is one selection of records. Sharing it again issues a
+              new code for the same selection.
             </p>
           </div>
           <Badge tone="gray">
@@ -502,23 +531,27 @@ export function ShareView({
                       key={code.id}
                       className="flex flex-wrap items-center gap-3 py-2 text-xs"
                     >
-                      <Badge tone={STATUS_TONES[code.status]}>{code.status}</Badge>
+                      <Badge tone={STATUS_TONES[code.status]}>
+                        {code.status}
+                      </Badge>
                       <span className="text-gray-500 dark:text-gray-400">
                         Created {format_timestamp(code.created_at)}
                       </span>
                       <span className="text-gray-400 dark:text-gray-500">
                         expires {format_timestamp(code.expires_at)}
                       </span>
-                      {user?.capabilities.revoke_shares && (code.status === "active" || code.status === "used") && (
-                        <button
-                          type="button"
-                          onClick={() => void revoke(code.id)}
-                          disabled={revoking_id === code.id}
-                          className="ml-auto font-semibold text-rose-600 transition hover:text-rose-700 disabled:opacity-60 dark:text-rose-400 dark:hover:text-rose-300"
-                        >
-                          {revoking_id === code.id ? "Revoking…" : "Revoke"}
-                        </button>
-                      )}
+                      {user?.capabilities.revoke_shares &&
+                        (code.status === "active" ||
+                          code.status === "used") && (
+                          <button
+                            type="button"
+                            onClick={() => void revoke(code.id)}
+                            disabled={revoking_id === code.id}
+                            className="ml-auto font-semibold text-rose-600 transition hover:text-rose-700 disabled:opacity-60 dark:text-rose-400 dark:hover:text-rose-300"
+                          >
+                            {revoking_id === code.id ? "Revoking…" : "Revoke"}
+                          </button>
+                        )}
                     </li>
                   ))}
                 </ul>

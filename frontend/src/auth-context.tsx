@@ -24,7 +24,9 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, set_user] = useState<User | null>(null);
   const [loading, set_loading] = useState(true);
-  const [google_client_id, set_google_client_id] = useState<string | null>(null);
+  const [google_client_id, set_google_client_id] = useState<string | null>(
+    null,
+  );
   const [test_user_enabled, set_test_user_enabled] = useState(false);
 
   useEffect(() => {
@@ -74,8 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (
       typeof window !== "undefined" &&
       "google" in window &&
-      (window as { google?: { accounts?: { id?: { disableAutoSelect?: () => void } } } })
-        .google?.accounts?.id?.disableAutoSelect
+      (
+        window as {
+          google?: { accounts?: { id?: { disableAutoSelect?: () => void } } };
+        }
+      ).google?.accounts?.id?.disableAutoSelect
     ) {
       (
         window as unknown as {
@@ -86,8 +91,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, google_client_id, test_user_enabled, sign_in_with_credential, sign_in_as_test_user, sign_out }),
-    [user, loading, google_client_id, test_user_enabled, sign_in_with_credential, sign_in_as_test_user, sign_out],
+    () => ({
+      user,
+      loading,
+      google_client_id,
+      test_user_enabled,
+      sign_in_with_credential,
+      sign_in_as_test_user,
+      sign_out,
+    }),
+    [
+      user,
+      loading,
+      google_client_id,
+      test_user_enabled,
+      sign_in_with_credential,
+      sign_in_as_test_user,
+      sign_out,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

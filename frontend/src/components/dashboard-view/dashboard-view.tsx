@@ -17,12 +17,18 @@ import {
 import { use_auth } from "../../auth-context";
 import { apply_theme, init_theme, type Theme } from "../../theme";
 import { use_plot_markers } from "../analytics-chart/marker-selection";
-import { CalendarItemModal, type CalendarSelection } from "../modal/calendar-item-modal";
+import {
+  CalendarItemModal,
+  type CalendarSelection,
+} from "../modal/calendar-item-modal";
 import { ExamRenameModal } from "../modal/exam-rename-modal";
 import { ManualExamModal } from "../modal/manual-exam-modal";
 import { MedicationModal } from "../modal/medication-modal";
 import { DashboardHeader } from "./header";
-import type { DashboardOverviewActions, DashboardOverviewData } from "./overview";
+import type {
+  DashboardOverviewActions,
+  DashboardOverviewData,
+} from "./overview";
 import type { DashboardRoute } from "./types";
 
 export interface DashboardRouteContent {
@@ -63,10 +69,16 @@ export function DashboardLayout({
   const router_navigate = useNavigate();
   const [exams, set_exams] = useState<Exam[]>([]);
   const [medications, set_medications] = useState<Medication[]>([]);
-  const [calendar_item, set_calendar_item] = useState<CalendarSelection | null>(null);
-  const [calendar_item_error, set_calendar_item_error] = useState<string | null>(null);
+  const [calendar_item, set_calendar_item] = useState<CalendarSelection | null>(
+    null,
+  );
+  const [calendar_item_error, set_calendar_item_error] = useState<
+    string | null
+  >(null);
   const [calendar_action_busy, set_calendar_action_busy] = useState(false);
-  const [rename_modal_exam, set_rename_modal_exam] = useState<Exam | null>(null);
+  const [rename_modal_exam, set_rename_modal_exam] = useState<Exam | null>(
+    null,
+  );
   const [manual_exam, set_manual_exam] = useState<Exam | null>(null);
   const [calendar, set_calendar] = useState<CalendarData>({
     exams: [],
@@ -79,15 +91,21 @@ export function DashboardLayout({
   const [load_error, set_load_error] = useState<string | null>(null);
   const [uploading, set_uploading] = useState(false);
   const [upload_progress, set_upload_progress] = useState(0);
-  const [retrying_exam_id, set_retrying_exam_id] = useState<number | null>(null);
+  const [retrying_exam_id, set_retrying_exam_id] = useState<number | null>(
+    null,
+  );
   const [exam_name, set_exam_name] = useState("");
-  const [notice, set_notice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [notice, set_notice] = useState<{
+    kind: "ok" | "err";
+    text: string;
+  } | null>(null);
   const [modal_open, set_modal_open] = useState(false);
   const [editing_med, set_editing_med] = useState<Medication | null>(null);
   const [renaming_id, set_renaming_id] = useState<number | null>(null);
   const [rename_value, set_rename_value] = useState("");
   const [theme, set_theme] = useState<Theme>(() => init_theme());
-  const { selected: plot_markers, toggle: toggle_plot_marker } = use_plot_markers();
+  const { selected: plot_markers, toggle: toggle_plot_marker } =
+    use_plot_markers();
   const file_input_ref = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(async () => {
@@ -102,7 +120,9 @@ export function DashboardLayout({
       set_calendar(cal);
       set_load_error(null);
     } catch (err) {
-      set_load_error(err instanceof Error ? err.message : "Failed to load data.");
+      set_load_error(
+        err instanceof Error ? err.message : "Failed to load data.",
+      );
     } finally {
       set_loading(false);
     }
@@ -113,31 +133,39 @@ export function DashboardLayout({
   }, [refresh, route]);
 
   const has_active_extractions = exams.some(
-    (exam) => exam.processing?.status === "queued" || exam.processing?.status === "processing",
+    (exam) =>
+      exam.processing?.status === "queued" ||
+      exam.processing?.status === "processing",
   );
 
   useEffect(() => {
     if (!has_active_extractions || route === "/profile") return;
     let active = true;
     const poll = () => {
-      void api.list_exams().then((updated) => {
-        if (active) {
-          set_exams(updated);
-          set_calendar((current) => ({
-            ...current,
-            exams: updated.map((exam) => ({
-              id: exam.id,
-              title: exam.title,
-              date: exam.date_performed,
-            })),
-          }));
-        }
-      }).catch(() => undefined);
+      void api
+        .list_exams()
+        .then((updated) => {
+          if (active) {
+            set_exams(updated);
+            set_calendar((current) => ({
+              ...current,
+              exams: updated.map((exam) => ({
+                id: exam.id,
+                title: exam.title,
+                date: exam.date_performed,
+              })),
+            }));
+          }
+        })
+        .catch(() => undefined);
       const query = search_query.trim();
       if (query) {
-        void api.search_exams(query).then((updated) => {
-          if (active) set_search_results(updated);
-        }).catch(() => undefined);
+        void api
+          .search_exams(query)
+          .then((updated) => {
+            if (active) set_search_results(updated);
+          })
+          .catch(() => undefined);
       }
     };
     const interval = window.setInterval(poll, 4000);
@@ -234,7 +262,9 @@ export function DashboardLayout({
       const blob = await api.exam_pdf(exam.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
-      const stem = exam.title.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[_\.]+|[_\.]+$/g, "");
+      const stem = exam.title
+        .replace(/[^A-Za-z0-9._-]+/g, "_")
+        .replace(/^[_\.]+|[_\.]+$/g, "");
       anchor.href = url;
       anchor.download = `${stem || "exam"}.pdf`;
       document.body.append(anchor);
@@ -242,7 +272,9 @@ export function DashboardLayout({
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
-      set_calendar_item_error(err instanceof Error ? err.message : "Could not download the PDF.");
+      set_calendar_item_error(
+        err instanceof Error ? err.message : "Could not download the PDF.",
+      );
     } finally {
       set_calendar_action_busy(false);
     }
@@ -250,12 +282,14 @@ export function DashboardLayout({
 
   async function delete_calendar_item() {
     if (!calendar_item || !user?.capabilities.delete_records) return;
-    const item_name = calendar_item.kind === "exam"
-      ? calendar_item.exam.title
-      : calendar_item.medication.name;
-    const confirmation = calendar_item.kind === "exam"
-      ? `Delete "${item_name}" and its uploaded PDF? This cannot be undone.`
-      : `Delete "${item_name}"? This cannot be undone.`;
+    const item_name =
+      calendar_item.kind === "exam"
+        ? calendar_item.exam.title
+        : calendar_item.medication.name;
+    const confirmation =
+      calendar_item.kind === "exam"
+        ? `Delete "${item_name}" and its uploaded PDF? This cannot be undone.`
+        : `Delete "${item_name}"? This cannot be undone.`;
     if (!window.confirm(confirmation)) return;
 
     set_calendar_action_busy(true);
@@ -277,13 +311,17 @@ export function DashboardLayout({
         );
         set_calendar((current) => ({
           ...current,
-          medications: current.medications.filter((med) => med.id !== medication_id),
+          medications: current.medications.filter(
+            (med) => med.id !== medication_id,
+          ),
         }));
       }
       set_calendar_item(null);
       await refresh();
     } catch (err) {
-      set_calendar_item_error(err instanceof Error ? err.message : "Could not delete the item.");
+      set_calendar_item_error(
+        err instanceof Error ? err.message : "Could not delete the item.",
+      );
     } finally {
       set_calendar_action_busy(false);
     }
@@ -312,7 +350,10 @@ export function DashboardLayout({
       set_upload_progress(100);
       set_exam_name("");
       await refresh();
-      set_notice({ kind: "ok", text: `“${exam.title}” uploaded. Extraction queued.` });
+      set_notice({
+        kind: "ok",
+        text: `“${exam.title}” uploaded. Extraction queued.`,
+      });
     } catch (err) {
       set_notice({
         kind: "err",
@@ -355,13 +396,19 @@ export function DashboardLayout({
 
   async function delete_exam(exam: Exam) {
     if (!user?.capabilities.delete_records) return;
-    if (!window.confirm(`Delete "${exam.title}" and its uploaded PDF? This cannot be undone.`)) {
+    if (
+      !window.confirm(
+        `Delete "${exam.title}" and its uploaded PDF? This cannot be undone.`,
+      )
+    ) {
       return;
     }
     try {
       await api.delete_exam(exam.id);
       set_exams((current) => current.filter((item) => item.id !== exam.id));
-      set_search_results((current) => current?.filter((item) => item.id !== exam.id) ?? null);
+      set_search_results(
+        (current) => current?.filter((item) => item.id !== exam.id) ?? null,
+      );
       set_calendar((current) => ({
         ...current,
         exams: current.exams.filter((item) => item.id !== exam.id),
@@ -380,19 +427,27 @@ export function DashboardLayout({
     set_retrying_exam_id(id);
     try {
       const updated = await api.retry_exam_extraction(id);
-      set_exams((current) => current.map((exam) => exam.id === id ? updated : exam));
-      set_search_results((current) => current?.map((exam) => exam.id === id ? updated : exam) ?? null);
+      set_exams((current) =>
+        current.map((exam) => (exam.id === id ? updated : exam)),
+      );
+      set_search_results(
+        (current) =>
+          current?.map((exam) => (exam.id === id ? updated : exam)) ?? null,
+      );
     } catch (err) {
       set_notice({
         kind: "err",
-        text: err instanceof Error ? err.message : "Could not retry extraction.",
+        text:
+          err instanceof Error ? err.message : "Could not retry extraction.",
       });
     } finally {
       set_retrying_exam_id(null);
     }
   }
 
-  const displayed = search_query.trim() ? (search_results ?? []) : exams.slice(0, 5);
+  const displayed = search_query.trim()
+    ? (search_results ?? [])
+    : exams.slice(0, 5);
 
   const abnormal_count = exams.reduce(
     (sum, exam) => sum + exam.biomarkers.filter((b) => b.is_abnormal).length,
@@ -490,10 +545,14 @@ export function DashboardLayout({
       on_back,
       on_changed: refresh,
       on_deleted: async (id) => {
-        set_medications((current) => current.filter((medication) => medication.id !== id));
+        set_medications((current) =>
+          current.filter((medication) => medication.id !== id),
+        );
         set_calendar((current) => ({
           ...current,
-          medications: current.medications.filter((medication) => medication.id !== id),
+          medications: current.medications.filter(
+            (medication) => medication.id !== id,
+          ),
         }));
         await refresh();
       },
@@ -504,13 +563,15 @@ export function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      {user?.capabilities.create_records && <input
-        ref={file_input_ref}
-        type="file"
-        accept="application/pdf,.pdf"
-        className="hidden"
-        onChange={handle_upload}
-      />}
+      {user?.capabilities.create_records && (
+        <input
+          ref={file_input_ref}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={handle_upload}
+        />
+      )}
       <DashboardHeader
         user={user}
         route={route}
@@ -526,7 +587,10 @@ export function DashboardLayout({
       {children(content)}
 
       <MedicationModal
-        open={modal_open && (editing_med !== null || Boolean(user?.capabilities.create_records))}
+        open={
+          modal_open &&
+          (editing_med !== null || Boolean(user?.capabilities.create_records))
+        }
         med={editing_med}
         onClose={() => {
           set_modal_open(false);
@@ -545,7 +609,10 @@ export function DashboardLayout({
         on_keep_pdf={keep_pdf_only}
         on_saved={(saved) => {
           set_manual_exam(null);
-          set_notice({ kind: "ok", text: `“${saved.title}” saved with manual results.` });
+          set_notice({
+            kind: "ok",
+            text: `“${saved.title}” saved with manual results.`,
+          });
           void refresh();
         }}
       />

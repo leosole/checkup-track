@@ -145,24 +145,26 @@ export function DashboardOverview({
       className={`mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 ${route !== "/" ? "hidden" : ""}`}
     >
       <div className="flex flex-wrap items-center gap-3">
-        {user?.capabilities.create_records && <>
-        <input
-          type="text"
-          value={exam_name}
-          onChange={(event) => on_exam_name_change(event.target.value)}
-          placeholder="Exam name (optional)"
-          aria-label="Exam name for the next upload"
-          className={`${DASHBOARD_FIELD} w-56`}
-        />
-        <Button onClick={on_upload} loading={uploading}>
-          {uploading
-            ? `Uploading PDF… ${upload_progress}%`
-            : "Upload lab report PDF"}
-        </Button>
-        <Button variant="secondary" onClick={on_add_medication}>
-          + Add medication
-        </Button>
-        </>}
+        {user?.capabilities.create_records && (
+          <>
+            <input
+              type="text"
+              value={exam_name}
+              onChange={(event) => on_exam_name_change(event.target.value)}
+              placeholder="Exam name (optional)"
+              aria-label="Exam name for the next upload"
+              className={`${DASHBOARD_FIELD} w-56`}
+            />
+            <Button onClick={on_upload} loading={uploading}>
+              {uploading
+                ? `Uploading PDF… ${upload_progress}%`
+                : "Upload lab report PDF"}
+            </Button>
+            <Button variant="secondary" onClick={on_add_medication}>
+              + Add medication
+            </Button>
+          </>
+        )}
         <Button variant="secondary" onClick={() => on_navigate("/share")}>
           Share data
         </Button>
@@ -189,10 +191,12 @@ export function DashboardOverview({
           </button>
         )}
       </div>
-      {user?.capabilities.create_records && <p className="-mt-1 text-xs text-gray-400 dark:text-gray-500">
-        Leave the exam name empty to use the report&apos;s own title, falling
-        back to the PDF file name.
-      </p>}
+      {user?.capabilities.create_records && (
+        <p className="-mt-1 text-xs text-gray-400 dark:text-gray-500">
+          Leave the exam name empty to use the report&apos;s own title, falling
+          back to the PDF file name.
+        </p>
+      )}
 
       {load_error && (
         <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
