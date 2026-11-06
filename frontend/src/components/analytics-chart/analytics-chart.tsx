@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type TimeSeries, type TimeSeriesResponse } from "../../api-client";
+import {
+  api,
+  type TimeSeries,
+  type TimeSeriesResponse,
+} from "../../api-client";
 import { Badge, Card, EmptyState, Spinner } from "../ui/badge";
 import { AnalyticsChartControls } from "./controls";
 import {
@@ -9,11 +13,12 @@ import {
   chart_color,
   type ChartGeometry,
 } from "./plot";
+import { MERGED_SPECS_KEY } from "./marker-selection";
 
 /** The exam fields the chart needs; owner and guest exam shapes both fit. */
 export type ChartExam = {
   date_performed: string;
-  biomarkers: { biomarker_name: string }[];
+  biomarkers: { biomarker_name: string; unit: string }[];
 };
 
 type SeriesLoader = (params: {
@@ -24,11 +29,38 @@ type SeriesLoader = (params: {
 
 interface AnalyticsChartProps {
   exams: ChartExam[];
+  exams_loading?: boolean;
   /** Marker names currently plotted, shared with the exam cards and modal. */
   selected: string[];
   on_toggle_spec: (spec: string) => void;
   /** Where series come from; guests pass the read-only guest endpoint. */
   load_series?: SeriesLoader;
+  /** Browser storage key for chart-only merge groups. */
+  merge_storage_key?: string;
+}
+
+type DisplaySeries = TimeSeries & { color_index: number };
+
+function normalized_spec(spec: string): string {
+  return spec.trim().toLowerCase();
+}
+
+function read_merge_groups(storage_key: string): string[][] {
+  try {
+    const raw = localStorage.getItem(storage_key);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (group): group is string[] =>
+            Array.isArray(group) &&
+            group.length > 1 &&
+            group.every((name) => typeof name === "string"),
+        )
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 /** All unique biomarker names across loaded exams, for the spec picker. */
@@ -63,13 +95,132 @@ function nice_ticks(min: number, max: number, count = 5): number[] {
 
 export function AnalyticsChart({
   exams,
+  exams_loading = false,
   selected,
   on_toggle_spec,
   load_series = api.time_series,
+  merge_storage_key = MERGED_SPECS_KEY,
 }: AnalyticsChartProps) {
   const wrap_ref = useRef<HTMLDivElement | null>(null);
 
   const specs = useMemo(() => available_specs(exams), [exams]);
+  const units_by_spec = useMemo(() => {
+    const units = new Map<string, Set<string>>();
+    for (const exam of exams) {
+      for (const biomarker of exam.biomarkers) {
+        const key = biomarker.biomarker_name.trim().toLowerCase();
+        const values = units.get(key) ?? new Set<string>();
+        values.add(biomarker.unit.trim());
+        units.set(key, values);
+      }
+    }
+    return units;
+  }, [exams]);
+  const [merge_groups, set_merge_groups] = useState<string[][]>(() =>
+    read_merge_groups(merge_storage_key),
+  );
+  const [merge_selection, set_merge_selection] = useState<string[]>([]);
+  const unit_of_spec = (spec: string) => {
+    const values = units_by_spec.get(spec.trim().toLowerCase());
+    if (!values || values.size === 0) return "";
+    return values.size > 1 ? "Mixed units" : Array.from(values)[0];
+  };
+  const active_merge_groups = useMemo(() => {
+    const selected_by_key = new Map(
+      selected.map((spec) => [normalized_spec(spec), spec]),
+    );
+    return merge_groups
+      .map((group) =>
+        group
+          .map((name) => selected_by_key.get(normalized_spec(name)))
+          .filter((name): name is string => Boolean(name)),
+      )
+      .filter((group) => group.length > 1);
+  }, [merge_groups, selected]);
+
+  useEffect(() => {
+    const active_groups_json = JSON.stringify(active_merge_groups);
+    set_merge_groups((previous) =>
+      JSON.stringify(previous) === active_groups_json
+        ? previous
+        : active_merge_groups,
+    );
+    try {
+      localStorage.setItem(merge_storage_key, active_groups_json);
+    } catch {
+      // Storage full or disabled: merges remain active for this chart session.
+    }
+  }, [active_merge_groups, merge_storage_key]);
+
+  useEffect(() => {
+    const selected_keys = new Set(selected.map(normalized_spec));
+    set_merge_selection((previous) =>
+      previous.filter((name) => selected_keys.has(normalized_spec(name))),
+    );
+  }, [selected]);
+
+  const selected_merge_specs = selected.filter((spec) =>
+    merge_selection.some(
+      (name) => normalized_spec(name) === normalized_spec(spec),
+    ),
+  );
+  const merge_members_map = new Map(
+    selected_merge_specs.map((spec) => [normalized_spec(spec), spec]),
+  );
+  for (const group of active_merge_groups) {
+    if (group.some((name) => merge_members_map.has(normalized_spec(name)))) {
+      for (const name of group)
+        merge_members_map.set(normalized_spec(name), name);
+    }
+  }
+  const merge_members = Array.from(merge_members_map.values());
+  let merge_disabled_reason: string | null = null;
+  if (selected_merge_specs.length < 2) {
+    merge_disabled_reason = "Select at least two markers to merge.";
+  } else {
+    const marker_units = merge_members.map((spec) =>
+      units_by_spec.get(normalized_spec(spec)),
+    );
+    if (marker_units.some((units) => !units || units.size !== 1)) {
+      merge_disabled_reason =
+        "Each marker must have results with one consistent unit before merging.";
+    } else {
+      const units = new Set(
+        marker_units.map((values) =>
+          (Array.from(values ?? [""])[0] ?? "").trim().toLowerCase(),
+        ),
+      );
+      if (units.size > 1) {
+        merge_disabled_reason = "Markers must use the same unit to be merged.";
+      }
+    }
+  }
+
+  function toggle_merge_selection(spec: string) {
+    set_merge_selection((previous) =>
+      previous.some((name) => normalized_spec(name) === normalized_spec(spec))
+        ? previous.filter(
+            (name) => normalized_spec(name) !== normalized_spec(spec),
+          )
+        : [...previous, spec],
+    );
+  }
+
+  function merge_selected() {
+    if (merge_disabled_reason) return;
+    set_merge_groups((previous) => [
+      ...previous.filter(
+        (group) =>
+          !group.some((name) =>
+            merge_members.some(
+              (member) => normalized_spec(member) === normalized_spec(name),
+            ),
+          ),
+      ),
+      merge_members,
+    ]);
+    set_merge_selection([]);
+  }
   const [spec_filter, set_spec_filter] = useState("");
   const [series, set_series] = useState<TimeSeries[]>([]);
   const [loading, set_loading] = useState(false);
@@ -92,6 +243,16 @@ export function AnalyticsChart({
   useEffect(() => {
     if (selected.length === 0) {
       set_series([]);
+      set_loading(false);
+      return;
+    }
+    if (exams_loading) {
+      set_loading(true);
+      return;
+    }
+    if (exams.length === 0) {
+      set_series([]);
+      set_loading(false);
       return;
     }
     let cancelled = false;
@@ -99,7 +260,8 @@ export function AnalyticsChart({
     set_error(null);
     const dates = exams.map((e) => e.date_performed).sort();
     const start = dates[0] ?? new Date().toISOString().slice(0, 10);
-    const end = dates[dates.length - 1] ?? new Date().toISOString().slice(0, 10);
+    const end =
+      dates[dates.length - 1] ?? new Date().toISOString().slice(0, 10);
     load_series({ start_date: start, end_date: end, specs: selected })
       .then((res) => {
         if (!cancelled) set_series(res.series);
@@ -113,10 +275,59 @@ export function AnalyticsChart({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, load_series]);
+  }, [selected, exams, exams_loading, load_series]);
 
-  const visible = series.filter((s) => s.points.length > 0);
+  const display_series = useMemo<DisplaySeries[]>(() => {
+    const series_by_key = new Map(
+      series.map((item) => [normalized_spec(item.spec), item]),
+    );
+    const group_by_key = new Map<string, string[]>();
+    for (const group of active_merge_groups) {
+      for (const name of group) group_by_key.set(normalized_spec(name), group);
+    }
+
+    const displayed: DisplaySeries[] = [];
+    const consumed = new Set<string>();
+    for (const spec of selected) {
+      const key = normalized_spec(spec);
+      if (consumed.has(key)) continue;
+      const group = group_by_key.get(key);
+      if (group) {
+        const members = group
+          .map((name) => series_by_key.get(normalized_spec(name)))
+          .filter((item): item is TimeSeries => Boolean(item));
+        const points = members
+          .flatMap((item) => item.points)
+          .sort((left, right) => left.date.localeCompare(right.date));
+        displayed.push({
+          spec: group.join(" + "),
+          unit: members[0]?.unit ?? "",
+          points,
+          color_index: Math.max(
+            0,
+            selected.findIndex(
+              (name) => normalized_spec(name) === normalized_spec(group[0]),
+            ),
+          ),
+        });
+        group.forEach((name) => consumed.add(normalized_spec(name)));
+      } else {
+        const item = series_by_key.get(key);
+        if (item) {
+          displayed.push({
+            ...item,
+            color_index: Math.max(
+              0,
+              selected.findIndex((name) => normalized_spec(name) === key),
+            ),
+          });
+        }
+        consumed.add(key);
+      }
+    }
+    return displayed;
+  }, [series, selected, active_merge_groups]);
+  const visible = display_series.filter((item) => item.points.length > 0);
 
   // Biomarker name filter for the chip picker (selection is unaffected).
   const filter_lower = spec_filter.trim().toLowerCase();
@@ -129,17 +340,21 @@ export function AnalyticsChart({
     const inner_h = CHART_HEIGHT - CHART_PAD.top - CHART_PAD.bottom;
 
     const all_points = visible.flatMap((s) => s.points);
-    const times = all_points.map((p) => new Date(p.date).getTime());
-    const min_t = times.length ? Math.min(...times) : 0;
-    const max_t = times.length ? Math.max(...times) : 1;
+    const dates = all_points.map((point) => point.date).sort();
+    const first_year = dates.length ? Number(dates[0].slice(0, 4)) : 0;
+    const last_year = dates.length
+      ? Number(dates[dates.length - 1].slice(0, 4))
+      : 0;
+    const domain_start = dates.length ? Date.UTC(first_year, 0, 1) : 0;
+    const domain_end = dates.length ? Date.UTC(last_year + 1, 0, 1) : 1;
+    const domain_span = domain_end - domain_start || 1;
     const values = all_points.map((p) => p.value);
     const min_v = values.length ? Math.min(...values) : 0;
     const max_v = values.length ? Math.max(...values) : 1;
 
     const x_of = (date: string) => {
       const t = new Date(date).getTime();
-      if (max_t === min_t) return CHART_PAD.left + inner_w / 2;
-      return CHART_PAD.left + ((t - min_t) / (max_t - min_t)) * inner_w;
+      return CHART_PAD.left + ((t - domain_start) / domain_span) * inner_w;
     };
 
     const pad_v = (max_v - min_v) * 0.1 || Math.abs(max_v) * 0.1 || 1;
@@ -151,12 +366,18 @@ export function AnalyticsChart({
     const y_ticks = nice_ticks(lo, hi, 5);
     const x_tick_count = Math.min(6, Math.max(2, Math.floor(inner_w / 110)));
     const x_ticks: string[] = [];
-    if (times.length > 0) {
+    if (dates.length > 0) {
       for (let i = 0; i < x_tick_count; i++) {
-        const t = min_t + ((max_t - min_t) * i) / (x_tick_count - 1 || 1);
+        const t = domain_start + (domain_span * i) / (x_tick_count - 1 || 1);
         x_ticks.push(new Date(t).toISOString().slice(0, 10));
       }
     }
+    const year_ticks = dates.length
+      ? Array.from({ length: last_year - first_year + 1 }, (_, index) => {
+          const year = first_year + index;
+          return { year, x: x_of(`${year}-01-01`) };
+        })
+      : [];
 
     const paths = visible.map((s) => {
       const sorted = [...s.points].sort(
@@ -168,10 +389,26 @@ export function AnalyticsChart({
             `${i === 0 ? "M" : "L"} ${x_of(p.date).toFixed(2)} ${y_of(p.value).toFixed(2)}`,
         )
         .join(" ");
-      return { spec: s.spec, unit: s.unit, d, points: sorted };
+      return {
+        spec: s.spec,
+        unit: s.unit,
+        color: chart_color(s.color_index),
+        d,
+        points: sorted,
+      };
     });
 
-    return { inner_w, inner_h, x_of, y_of, y_ticks, x_ticks, paths, has_data: all_points.length > 0 };
+    return {
+      inner_w,
+      inner_h,
+      x_of,
+      y_of,
+      y_ticks,
+      x_ticks,
+      year_ticks,
+      paths,
+      has_data: all_points.length > 0,
+    };
   }, [visible, width]);
 
   return (
@@ -192,10 +429,16 @@ export function AnalyticsChart({
         specs={specs}
         filtered_specs={filtered_specs}
         selected={selected}
+        unit_of_spec={unit_of_spec}
+        merge_selection={merge_selection}
+        merge_member_count={merge_members.length}
+        merge_disabled_reason={merge_disabled_reason}
         spec_filter={spec_filter}
         on_spec_filter_change={set_spec_filter}
         on_clear_filter={() => set_spec_filter("")}
         on_toggle_spec={on_toggle_spec}
+        on_toggle_merge_selection={toggle_merge_selection}
+        on_merge_selected={merge_selected}
         color_of={chart_color}
       />
 
@@ -213,8 +456,16 @@ export function AnalyticsChart({
         )}
         {!loading && !error && visible.length === 0 && (
           <EmptyState
-            title="No series selected"
-            hint="Search for a biomarker above and pick the markers you want to plot over time."
+            title={
+              selected.length > 0
+                ? "No results for selected markers"
+                : "No series selected"
+            }
+            hint={
+              selected.length > 0
+                ? "The selected markers have no results in the current exam date range."
+                : "Search for a biomarker above and pick the markers you want to plot over time."
+            }
           />
         )}
         {visible.length > 0 && (

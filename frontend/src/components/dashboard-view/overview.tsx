@@ -83,7 +83,9 @@ function StatCard({
       <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
         {value}
       </p>
-      {hint && <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{hint}</p>}
+      {hint && (
+        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{hint}</p>
+      )}
     </Card>
   );
 }
@@ -150,7 +152,9 @@ export function DashboardOverview({
           className={`${DASHBOARD_FIELD} w-56`}
         />
         <Button onClick={on_upload} loading={uploading}>
-          {uploading ? `Uploading PDF… ${upload_progress}%` : "Upload lab report PDF"}
+          {uploading
+            ? `Uploading PDF… ${upload_progress}%`
+            : "Upload lab report PDF"}
         </Button>
         <Button variant="secondary" onClick={on_add_medication}>
           + Add medication
@@ -176,13 +180,14 @@ export function DashboardOverview({
             onClick={on_clear_search}
             className="ml-auto text-sm font-medium text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
           >
-            Clear search ({displayed.length} result{displayed.length === 1 ? "" : "s"})
+            Clear search ({displayed.length} result
+            {displayed.length === 1 ? "" : "s"})
           </button>
         )}
       </div>
       <p className="-mt-1 text-xs text-gray-400 dark:text-gray-500">
-        Leave the exam name empty to use the report&apos;s own title, falling back to the
-        PDF file name.
+        Leave the exam name empty to use the report&apos;s own title, falling
+        back to the PDF file name.
       </p>
 
       {load_error && (
@@ -192,7 +197,12 @@ export function DashboardOverview({
       )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Exams on file" value={exams.length} hint="Parsed lab reports" tone="brand" />
+        <StatCard
+          label="Exams on file"
+          value={exams.length}
+          hint="Parsed lab reports"
+          tone="brand"
+        />
         <StatCard
           label="Biomarkers tracked"
           value={exams.reduce((sum, exam) => sum + exam.biomarkers.length, 0)}
@@ -245,6 +255,7 @@ export function DashboardOverview({
       <section>
         <AnalyticsChart
           exams={exams}
+          exams_loading={loading}
           selected={plot_markers}
           on_toggle_spec={on_toggle_plot_marker}
         />

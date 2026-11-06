@@ -6,6 +6,9 @@ const SELECTED_SPECS_KEY = "vitals.trends.markers";
 /** Guests keep their own selection so it never mixes with an owner session. */
 export const GUEST_SELECTED_SPECS_KEY = "vitals.guest.trends.markers";
 
+export const MERGED_SPECS_KEY = "vitals.trends.merged";
+export const GUEST_MERGED_SPECS_KEY = "vitals.guest.trends.merged";
+
 function read_saved_specs(storage_key: string): string[] {
   try {
     const raw = localStorage.getItem(storage_key);
@@ -37,11 +40,35 @@ export function use_plot_markers(storage_key: string = SELECTED_SPECS_KEY) {
     }
   }, [selected, storage_key]);
 
-  const toggle = useCallback((spec: string) => {
-    set_selected((prev) =>
-      prev.includes(spec) ? prev.filter((item) => item !== spec) : [...prev, spec],
-    );
-  }, []);
+  const toggle = useCallback(
+    (spec: string, available_specs: string[] = [spec]) => {
+      const normalized_spec = spec.trim().toLowerCase();
+      const matching_specs = available_specs.filter((name) =>
+        name.toLowerCase().includes(normalized_spec),
+      );
+      const candidates = matching_specs.length > 0 ? matching_specs : [spec];
+
+      set_selected((prev) => {
+        const selected_index = prev.findIndex(
+          (name) => name.trim().toLowerCase() === normalized_spec,
+        );
+        if (selected_index >= 0) {
+          return prev.filter((_, index) => index !== selected_index);
+        }
+
+        const selected_names = new Set(
+          prev.map((name) => name.trim().toLowerCase()),
+        );
+        return [
+          ...prev,
+          ...candidates.filter(
+            (name) => !selected_names.has(name.trim().toLowerCase()),
+          ),
+        ];
+      });
+    },
+    [],
+  );
 
   return { selected, toggle };
 }

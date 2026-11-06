@@ -782,10 +782,10 @@ def _build_time_series(
     start_date: Optional[date],
     end_date: Optional[date],
 ) -> TimeSeriesResponse:
-    """Group already-scoped biomarker rows chronologically per requested spec."""
+    """Group exact normalized biomarker-name matches chronologically."""
     series: List[TimeSeries] = []
     for spec in specs:
-        spec_lower = spec.lower()
+        spec_key = spec.strip().casefold()
         points: List[TimeSeriesPoint] = []
         unit = ""
         for biomarker, exam in rows:
@@ -793,7 +793,7 @@ def _build_time_series(
                 continue
             if end_date is not None and exam.date_performed > end_date:
                 continue
-            if spec_lower in biomarker.biomarker_name.lower():
+            if spec_key == biomarker.biomarker_name.strip().casefold():
                 if not unit:
                     unit = biomarker.unit
                 points.append(

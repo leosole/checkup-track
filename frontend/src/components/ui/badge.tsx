@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { PiPillFill } from "react-icons/pi";
 
 type BadgeTone = "gray" | "brand" | "success" | "warning" | "danger" | "info";
 
@@ -12,8 +13,7 @@ const TONES: Record<BadgeTone, string> = {
     "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30",
   danger:
     "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30",
-  info:
-    "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/30",
+  info: "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/30",
 };
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
@@ -52,29 +52,15 @@ export function Card({ className = "", children, ...rest }: CardProps) {
   );
 }
 
-export function Spinner({ className = "h-5 w-5" }: { className?: string } = {}) {
+export function Spinner({
+  className = "h-5 w-5",
+}: { className?: string } = {}) {
   return (
-    <svg
+    <PiPillFill
       className={`animate-spin text-brand-600 dark:text-brand-400 ${className}`}
-      viewBox="0 0 24 24"
-      fill="none"
       role="status"
       aria-label="Loading"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-      />
-    </svg>
+    ></PiPillFill>
   );
 }
 
@@ -89,10 +75,16 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50/60 px-6 py-10 text-center dark:border-gray-700 dark:bg-gray-900/40">
-      {icon && <div className="mb-3 text-gray-400 dark:text-gray-500">{icon}</div>}
-      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{title}</p>
+      {icon && (
+        <div className="mb-3 text-gray-400 dark:text-gray-500">{icon}</div>
+      )}
+      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+        {title}
+      </p>
       {hint && (
-        <p className="mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">{hint}</p>
+        <p className="mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">
+          {hint}
+        </p>
       )}
     </div>
   );

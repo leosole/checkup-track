@@ -13,6 +13,7 @@ import { Input } from "./ui/input";
 import { Logo } from "./logo";
 import { AnalyticsChart } from "./analytics-chart/analytics-chart";
 import {
+  GUEST_MERGED_SPECS_KEY,
   GUEST_SELECTED_SPECS_KEY,
   use_plot_markers,
 } from "./analytics-chart/marker-selection";
@@ -34,9 +35,16 @@ export function GuestView() {
   const [code, set_code] = useState("");
   const [error, set_error] = useState<string | null>(null);
   const [submitting, set_submitting] = useState(false);
-  const { selected: plot_markers, toggle: toggle_plot_marker } = use_plot_markers(
-    GUEST_SELECTED_SPECS_KEY,
-  );
+  const { selected: plot_markers, toggle: toggle_plot_marker } =
+    use_plot_markers(GUEST_SELECTED_SPECS_KEY);
+
+  function toggle_marker(name: string) {
+    const available_names =
+      data?.exams.flatMap((exam) =>
+        exam.biomarkers.map((biomarker) => biomarker.biomarker_name),
+      ) ?? [];
+    toggle_plot_marker(name, available_names);
+  }
 
   const load = useCallback(async () => {
     set_loading(true);
@@ -119,12 +127,15 @@ export function GuestView() {
                 View shared records
               </h1>
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Enter the one-time code you received. You will be able to view the
-                shared exams and medications, but not change anything.
+                Enter the one-time code you received. You will be able to view
+                the shared exams and medications, but not change anything.
               </p>
             </div>
 
-            <form className="mt-7 space-y-3" onSubmit={(event) => void redeem(event)}>
+            <form
+              className="mt-7 space-y-3"
+              onSubmit={(event) => void redeem(event)}
+            >
               <Input
                 label="Share code"
                 placeholder="XXXX-XXXX-XXXX"
@@ -154,7 +165,8 @@ export function GuestView() {
             )}
 
             <p className="mt-6 text-center text-xs text-gray-400 dark:text-gray-500">
-              Codes are single use. Ask the owner for a new one if this one expired.
+              Codes are single use. Ask the owner for a new one if this one
+              expired.
             </p>
             <p className="mt-3 text-center text-xs text-gray-500 dark:text-gray-400">
               Owner?{" "}
@@ -188,7 +200,9 @@ export function GuestView() {
             <p className="text-sm font-semibold text-gray-900 dark:text-white">
               CheckUpTrack
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Shared records</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Shared records
+            </p>
           </div>
           <Badge tone="info" className="ml-auto">
             View only
@@ -292,13 +306,15 @@ export function GuestView() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      toggle_plot_marker(biomarker.biomarker_name)
+                                      toggle_marker(biomarker.biomarker_name)
                                     }
                                     aria-pressed={plotted}
                                     aria-label={`${biomarker.biomarker_name}: ${
                                       biomarker.value
                                     } ${biomarker.unit}. ${
-                                      plotted ? "Remove from trend plot" : "Add to trend plot"
+                                      plotted
+                                        ? "Remove from trend plot"
+                                        : "Add to trend plot"
                                     }`}
                                     className="flex w-full items-center gap-2 rounded-md py-0.5 text-left transition hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 dark:hover:text-brand-300"
                                   >
@@ -338,9 +354,15 @@ export function GuestView() {
                                 </td>
                                 <td className="px-2 py-2">
                                   <Badge
-                                    tone={biomarker.is_abnormal ? "danger" : "success"}
+                                    tone={
+                                      biomarker.is_abnormal
+                                        ? "danger"
+                                        : "success"
+                                    }
                                   >
-                                    {biomarker.is_abnormal ? "Out of range" : "In range"}
+                                    {biomarker.is_abnormal
+                                      ? "Out of range"
+                                      : "In range"}
                                   </Badge>
                                 </td>
                               </tr>
@@ -360,8 +382,9 @@ export function GuestView() {
           <AnalyticsChart
             exams={data.exams}
             selected={plot_markers}
-            on_toggle_spec={toggle_plot_marker}
+            on_toggle_spec={toggle_marker}
             load_series={api.guest_time_series}
+            merge_storage_key={GUEST_MERGED_SPECS_KEY}
           />
         </section>
 

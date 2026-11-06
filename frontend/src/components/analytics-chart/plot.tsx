@@ -19,6 +19,7 @@ export const CHART_HEIGHT = 380;
 interface ChartPath {
   spec: string;
   unit: string;
+  color: string;
   d: string;
   points: TimeSeriesPoint[];
 }
@@ -30,6 +31,7 @@ export interface ChartGeometry {
   y_of: (value: number) => number;
   y_ticks: number[];
   x_ticks: string[];
+  year_ticks: { year: number; x: number }[];
   paths: ChartPath[];
   has_data: boolean;
 }
@@ -69,8 +71,8 @@ export function AnalyticsChartPlot({
     const mouse_y = ((event.clientY - rect.top) / rect.width) * width;
 
     let best: (Tooltip & { dist: number }) | null = null;
-    geometry.paths.forEach((path, index) => {
-      const color = chart_color(index);
+    geometry.paths.forEach((path) => {
+      const color = path.color;
       for (const point of path.points) {
         const x = geometry.x_of(point.date);
         const y = geometry.y_of(point.value);
@@ -141,6 +143,30 @@ export function AnalyticsChartPlot({
           </g>
         ))}
 
+        {geometry.year_ticks.map(({ year, x }) => (
+          <g key={`year-${year}`}>
+            <line
+              x1={x}
+              x2={x}
+              y1={CHART_PAD.top}
+              y2={CHART_HEIGHT - CHART_PAD.bottom}
+              className="stroke-gray-400 dark:stroke-gray-500"
+              strokeWidth={1.5}
+              strokeDasharray="4 4"
+            />
+            <text
+              x={x + 4}
+              y={CHART_PAD.top - 8}
+              textAnchor="start"
+              fontSize={11}
+              fontWeight={600}
+              className="fill-gray-600 dark:fill-gray-300"
+            >
+              {year}
+            </text>
+          </g>
+        ))}
+
         {geometry.x_ticks.map((tick) => (
           <text
             key={`x-${tick}`}
@@ -172,8 +198,8 @@ export function AnalyticsChartPlot({
         />
 
         <g clipPath={`url(#${react_id}-clip)`}>
-          {geometry.paths.map((path, index) => {
-            const color = chart_color(index);
+          {geometry.paths.map((path) => {
+            const color = path.color;
             return (
               <g key={path.spec}>
                 <path
@@ -212,7 +238,10 @@ export function AnalyticsChartPlot({
         <div
           className="pointer-events-none absolute z-20 w-56 rounded-lg bg-gray-900 px-3 py-2 text-xs text-white shadow-lg"
           style={{
-            left: Math.min(Math.max(tooltip.x + 12, 0), Math.max(0, width - 232)),
+            left: Math.min(
+              Math.max(tooltip.x + 12, 0),
+              Math.max(0, width - 232),
+            ),
             top: Math.max(tooltip.y - 64, 0),
           }}
         >
@@ -238,18 +267,20 @@ export function AnalyticsChartPlot({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-        {geometry.paths.map((path, index) => (
+        {geometry.paths.map((path) => (
           <span
             key={path.spec}
             className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-gray-300"
           >
             <span
               className="h-2.5 w-2.5 rounded-full"
-              style={{ background: chart_color(index) }}
+              style={{ background: path.color }}
             />
             {path.spec}
             {path.unit && (
-              <span className="text-gray-400 dark:text-gray-500">({path.unit})</span>
+              <span className="text-gray-400 dark:text-gray-500">
+                ({path.unit})
+              </span>
             )}
           </span>
         ))}
