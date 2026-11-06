@@ -110,7 +110,7 @@ export function DashboardExamList({
                           : "Preparing extraction";
             return (
               <Card key={exam.id} className="p-5">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-4">
                   <div className="min-w-0 flex-1">
                     {renaming_id === exam.id ? (
                       <form
@@ -138,7 +138,7 @@ export function DashboardExamList({
                         </button>
                       </form>
                     ) : (
-                      <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
                         <button
                           type="button"
                           onClick={() => on_show_exam(exam.id)}
@@ -147,43 +147,6 @@ export function DashboardExamList({
                         >
                           {exam.title}
                         </button>
-                        <button
-                          type="button"
-                          aria-label={`Rename ${exam.title}`}
-                          title="Rename exam"
-                          onClick={() => on_start_rename(exam)}
-                          className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-                        >
-                          <svg
-                            className="h-3.5 w-3.5"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
-                          </svg>
-                        </button>
-                        {user?.capabilities.delete_records && (
-                          <button
-                            type="button"
-                            aria-label={`Delete ${exam.title}`}
-                            title="Delete exam and PDF"
-                            onClick={() => void on_delete_exam(exam)}
-                            className="rounded-md p-1 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 dark:text-gray-500 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-                          >
-                            <svg
-                              className="h-3.5 w-3.5"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                              aria-hidden="true"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M8.75 1A2.75 2.75 0 006 3.75V4H3.75a.75.75 0 000 1.5h.616l.74 10.5A2.75 2.75 0 007.846 18.5h4.308a2.75 2.75 0 002.744-2.5l.74-10.5h.616a.75.75 0 000-1.5H14v-.25A2.75 2.75 0 0011.25 1h-2.5zM7.5 4v.25c0 .69.56 1.25 1.25 1.25h2.5c.69 0 1.25-.56 1.25-1.25V4h-5zm1.5 4.5a.75.75 0 011.5 0v5a.75.75 0 01-1.5 0v-5zm3.75-.75a.75.75 0 000 1.5v5a.75.75 0 001.5 0v-5a.75.75 0 00-1.5 0z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </button>
-                        )}
                       </div>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -217,13 +180,85 @@ export function DashboardExamList({
                       )}
                     </div>
                   </div>
+                  <div className="flex w-32 shrink-0 flex-col items-stretch gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => on_open_exam_pdf(exam.id)}
+                    >
+                      <svg
+                        className="h-3.5 w-3.5 shrink-0"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path d="M4 3a2 2 0 00-2 2v2.5a.75.75 0 001.5 0V5a.5.5 0 01.5-.5h3.25a.75.75 0 000-1.5H4zM16 3h-3.25a.75.75 0 000 1.5H16a.5.5 0 01.5.5v2.5a.75.75 0 001.5 0V5a2 2 0 00-2-2zM3.5 12.5a.75.75 0 00-1.5 0V15a2 2 0 002 2h3.25a.75.75 0 000-1.5H4a.5.5 0 01-.5-.5v-2.5zM17.5 12.5a.75.75 0 00-1.5 0V15a.5.5 0 01-.5.5h-3.25a.75.75 0 000 1.5H16a2 2 0 002-2v-2.5z" />
+                      </svg>
+                      Open PDF
+                    </Button>
+                    {user?.capabilities.retry_extraction &&
+                      processing?.retry_allowed && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="w-full"
+                          loading={retrying_exam_id === exam.id}
+                          onClick={() => on_retry_exam(exam.id)}
+                        >
+                          Retry extraction
+                        </Button>
+                      )}
+                    {renaming_id !== exam.id && (
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          aria-label={`Rename ${exam.title}`}
+                          title="Rename exam"
+                          onClick={() => on_start_rename(exam)}
+                          className="rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            aria-hidden="true"
+                          >
+                            <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                          </svg>
+                        </button>
+                        {user?.capabilities.delete_records && (
+                          <button
+                            type="button"
+                            aria-label={`Delete ${exam.title}`}
+                            title="Delete exam and PDF"
+                            onClick={() => void on_delete_exam(exam)}
+                            className="rounded-md p-1.5 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 dark:text-gray-500 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                          >
+                            <svg
+                              className="h-4 w-4"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                              aria-hidden="true"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M8.75 1A2.75 2.75 0 006 3.75V4H3.75a.75.75 0 000 1.5h.616l.74 10.5A2.75 2.75 0 007.846 18.5h4.308a2.75 2.75 0 002.744-2.5l.74-10.5h.616a.75.75 0 000-1.5H14v-.25A2.75 2.75 0 0011.25 1h-2.5zM7.5 4v.25c0 .69.56 1.25 1.25 1.25h2.5c.69 0 1.25-.56 1.25-1.25V4h-5zm1.5 4.5a.75.75 0 011.5 0v5a.75.75 0 01-1.5 0v-5zm3.75-.75a.75.75 0 000 1.5v5a.75.75 0 001.5 0v-5a.75.75 0 00-1.5 0z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <details className="group mt-3">
+                <details className="mt-3 [&[open]>summary>svg]:rotate-180">
                   <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-gray-500 marker:hidden hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 dark:text-gray-400 dark:hover:text-gray-200 [&::-webkit-details-marker]:hidden">
                     Results ({exam.biomarkers.length})
                     <svg
-                      className="h-3.5 w-3.5 transition-transform group-open:rotate-180"
+                      className="h-3.5 w-3.5 transition-transform"
                       viewBox="0 0 20 20"
                       fill="currentColor"
                       aria-hidden="true"
@@ -273,7 +308,7 @@ export function DashboardExamList({
                               : "Add to trend plot"
                           }`}
                           className={[
-                            "group relative inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600",
+                            "group/marker relative inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600",
                             plotted
                               ? "bg-brand-50 text-brand-700 ring-brand-400 dark:bg-brand-500/15 dark:text-brand-200 dark:ring-brand-500/50"
                               : biomarker.is_abnormal
@@ -305,7 +340,7 @@ export function DashboardExamList({
                           )}
                           <span
                             role="tooltip"
-                            className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover:block group-focus-visible:block dark:bg-gray-700"
+                            className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover/marker:block group-focus-visible/marker:block dark:bg-gray-700"
                           >
                             {biomarker.reference_range
                               ? `Normal range: ${biomarker.reference_range}`
@@ -322,34 +357,6 @@ export function DashboardExamList({
                     {exam.extraction_error}
                   </p>
                 )}
-
-                <div className="mt-3 flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => on_open_exam_pdf(exam.id)}
-                  >
-                    <svg
-                      className="h-3.5 w-3.5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path d="M4 3a2 2 0 00-2 2v2.5a.75.75 0 001.5 0V5a.5.5 0 01.5-.5h3.25a.75.75 0 000-1.5H4zM16 3h-3.25a.75.75 0 000 1.5H16a.5.5 0 01.5.5v2.5a.75.75 0 001.5 0V5a2 2 0 00-2-2zM3.5 12.5a.75.75 0 00-1.5 0V15a2 2 0 002 2h3.25a.75.75 0 000-1.5H4a.5.5 0 01-.5-.5v-2.5zM17.5 12.5a.75.75 0 00-1.5 0V15a.5.5 0 01-.5.5h-3.25a.75.75 0 000 1.5H16a2 2 0 002-2v-2.5z" />
-                    </svg>
-                    Open PDF
-                  </Button>
-                  {user?.capabilities.retry_extraction &&
-                    processing?.retry_allowed && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        loading={retrying_exam_id === exam.id}
-                        onClick={() => on_retry_exam(exam.id)}
-                      >
-                        Retry extraction
-                      </Button>
-                    )}
-                </div>
               </Card>
             );
           })}

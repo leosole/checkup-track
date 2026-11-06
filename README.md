@@ -42,6 +42,8 @@ medications on the same timeline.
 - Light and dark themes throughout, with a responsive layout that works on
   phone-width screens.
 
+A deployed version can be tested on [checkup-track-bzzs.onrender.com](https://checkup-track-bzzs.onrender.com/), logging in as a test user. You won't be able to login with google (only for me atm)
+
 ## Repository layout
 
 ```

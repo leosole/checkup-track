@@ -226,6 +226,11 @@ export function AnalyticsChart({
   const [loading, set_loading] = useState(false);
   const [error, set_error] = useState<string | null>(null);
   const [width, set_width] = useState(720);
+  const exam_dates = exams.map((exam) => exam.date_performed).sort();
+  const start_date = exam_dates[0] ?? "";
+  const end_date = exam_dates[exam_dates.length - 1] ?? "";
+  const date_bounds_ref = useRef({ start_date, end_date });
+  date_bounds_ref.current = { start_date, end_date };
 
   // Responsive width.
   useEffect(() => {
@@ -239,7 +244,7 @@ export function AnalyticsChart({
     return () => observer.disconnect();
   }, []);
 
-  // Fetch time-series whenever the selection changes.
+  // Read current date bounds without refetching for polling-only exam updates.
   useEffect(() => {
     if (selected.length === 0) {
       set_series([]);
@@ -258,11 +263,7 @@ export function AnalyticsChart({
     let cancelled = false;
     set_loading(true);
     set_error(null);
-    const dates = exams.map((e) => e.date_performed).sort();
-    const start = dates[0] ?? new Date().toISOString().slice(0, 10);
-    const end =
-      dates[dates.length - 1] ?? new Date().toISOString().slice(0, 10);
-    load_series({ start_date: start, end_date: end, specs: selected })
+    load_series({ ...date_bounds_ref.current, specs: selected })
       .then((res) => {
         if (!cancelled) set_series(res.series);
       })
@@ -275,7 +276,7 @@ export function AnalyticsChart({
     return () => {
       cancelled = true;
     };
-  }, [selected, exams, exams_loading, load_series]);
+  }, [selected, exams_loading, load_series]);
 
   const display_series = useMemo<DisplaySeries[]>(() => {
     const series_by_key = new Map(
