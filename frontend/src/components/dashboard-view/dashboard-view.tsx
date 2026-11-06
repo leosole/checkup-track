@@ -16,7 +16,10 @@ import {
 } from "../../api-client";
 import { use_auth } from "../../auth-context";
 import { apply_theme, init_theme, type Theme } from "../../theme";
-import { use_plot_markers } from "../analytics-chart/marker-selection";
+import {
+  has_marker,
+  use_plot_markers,
+} from "../analytics-chart/marker-selection";
 import {
   CalendarItemModal,
   type CalendarSelection,
@@ -237,7 +240,7 @@ export function DashboardLayout({
 
   // Clicking a marker in any exam card or the exam modal toggles its series.
   function toggle_marker(name: string) {
-    const plotted = plot_markers.includes(name);
+    const plotted = has_marker(plot_markers, name);
     toggle_plot_marker(name);
     set_notice({
       kind: "ok",

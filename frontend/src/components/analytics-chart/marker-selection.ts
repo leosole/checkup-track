@@ -9,13 +9,38 @@ export const GUEST_SELECTED_SPECS_KEY = "vitals.guest.trends.markers";
 export const MERGED_SPECS_KEY = "vitals.trends.merged";
 export const GUEST_MERGED_SPECS_KEY = "vitals.guest.trends.merged";
 
+/** Marker identity used by the backend: case- and surrounding-space-insensitive. */
+export function marker_key(spec: string): string {
+  return spec.trim().toLowerCase();
+}
+
+export function has_marker(specs: string[], spec: string): boolean {
+  const key = marker_key(spec);
+  return specs.some((name) => marker_key(name) === key);
+}
+
+/** Keeps the first spelling of each marker so variants are not listed twice. */
+export function unique_specs(specs: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const spec of specs) {
+    const key = marker_key(spec);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(spec.trim());
+  }
+  return unique;
+}
+
 function read_saved_specs(storage_key: string): string[] {
   try {
     const raw = localStorage.getItem(storage_key);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed)
-      ? parsed.filter((value): value is string => typeof value === "string")
+      ? unique_specs(
+          parsed.filter((value): value is string => typeof value === "string"),
+        )
       : [];
   } catch {
     return [];
@@ -42,29 +67,17 @@ export function use_plot_markers(storage_key: string = SELECTED_SPECS_KEY) {
 
   const toggle = useCallback(
     (spec: string, available_specs: string[] = [spec]) => {
-      const normalized_spec = spec.trim().toLowerCase();
+      const normalized_spec = marker_key(spec);
       const matching_specs = available_specs.filter((name) =>
-        name.toLowerCase().includes(normalized_spec),
+        marker_key(name).includes(normalized_spec),
       );
       const candidates = matching_specs.length > 0 ? matching_specs : [spec];
 
       set_selected((prev) => {
-        const selected_index = prev.findIndex(
-          (name) => name.trim().toLowerCase() === normalized_spec,
-        );
-        if (selected_index >= 0) {
-          return prev.filter((_, index) => index !== selected_index);
+        if (prev.some((name) => marker_key(name) === normalized_spec)) {
+          return prev.filter((name) => marker_key(name) !== normalized_spec);
         }
-
-        const selected_names = new Set(
-          prev.map((name) => name.trim().toLowerCase()),
-        );
-        return [
-          ...prev,
-          ...candidates.filter(
-            (name) => !selected_names.has(name.trim().toLowerCase()),
-          ),
-        ];
+        return unique_specs([...prev, ...candidates]);
       });
     },
     [],

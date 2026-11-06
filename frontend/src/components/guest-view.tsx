@@ -13,6 +13,7 @@ import { Input } from "./ui/input";
 import { Logo } from "./logo";
 import { AnalyticsChart } from "./analytics-chart/analytics-chart";
 import {
+  has_marker,
   GUEST_MERGED_SPECS_KEY,
   GUEST_SELECTED_SPECS_KEY,
   use_plot_markers,
@@ -294,7 +295,8 @@ export function GuestView() {
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                           {exam.biomarkers.map((biomarker) => {
-                            const plotted = plot_markers.includes(
+                            const plotted = has_marker(
+                              plot_markers,
                               biomarker.biomarker_name,
                             );
                             return (

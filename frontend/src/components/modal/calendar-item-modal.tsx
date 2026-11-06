@@ -4,6 +4,7 @@ import { format_date } from "../../date-utils";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Modal } from "../ui/modal";
+import { has_marker } from "../analytics-chart/marker-selection";
 
 export type CalendarSelection =
   { kind: "exam"; exam: Exam } | { kind: "medication"; medication: Medication };
@@ -137,7 +138,8 @@ export function CalendarItemModal({
                 </p>
                 <ul className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
                   {item.exam.biomarkers.map((biomarker) => {
-                    const plotted = plot_markers.includes(
+                    const plotted = has_marker(
+                      plot_markers,
                       biomarker.biomarker_name,
                     );
                     return (

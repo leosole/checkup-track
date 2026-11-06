@@ -1,3 +1,5 @@
+import { marker_key } from "./marker-selection";
+
 interface AnalyticsChartControlsProps {
   specs: string[];
   filtered_specs: string[];
@@ -55,7 +57,7 @@ export function AnalyticsChartControls({
                   <input
                     type="checkbox"
                     checked={merge_selection.some(
-                      (name) => name.toLowerCase() === spec.toLowerCase(),
+                      (name) => marker_key(name) === marker_key(spec),
                     )}
                     onChange={() => on_toggle_merge_selection(spec)}
                     aria-label={`Select ${spec} to merge`}

@@ -6,6 +6,7 @@ import type { DashboardRoute } from "./types";
 import { Badge, Card, EmptyState, Spinner } from "../ui/badge";
 import { Button } from "../ui/button";
 import { DASHBOARD_FIELD } from "./field";
+import { has_marker } from "../analytics-chart/marker-selection";
 
 interface DashboardExamListProps {
   exams: Exam[];
@@ -286,7 +287,8 @@ export function DashboardExamList({
                         </span>
                       )}
                     {exam.biomarkers.map((biomarker) => {
-                      const plotted = plot_markers.includes(
+                      const plotted = has_marker(
+                        plot_markers,
                         biomarker.biomarker_name,
                       );
                       const range_label = biomarker.reference_range

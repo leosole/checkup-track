@@ -13,7 +13,11 @@ import {
   chart_color,
   type ChartGeometry,
 } from "./plot";
-import { MERGED_SPECS_KEY } from "./marker-selection";
+import {
+  marker_key as normalized_spec,
+  MERGED_SPECS_KEY,
+  unique_specs,
+} from "./marker-selection";
 
 /** The exam fields the chart needs; owner and guest exam shapes both fit. */
 export type ChartExam = {
@@ -41,22 +45,20 @@ interface AnalyticsChartProps {
 
 type DisplaySeries = TimeSeries & { color_index: number };
 
-function normalized_spec(spec: string): string {
-  return spec.trim().toLowerCase();
-}
-
 function read_merge_groups(storage_key: string): string[][] {
   try {
     const raw = localStorage.getItem(storage_key);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed)
-      ? parsed.filter(
-          (group): group is string[] =>
-            Array.isArray(group) &&
-            group.length > 1 &&
-            group.every((name) => typeof name === "string"),
-        )
+      ? parsed
+          .filter(
+            (group): group is string[] =>
+              Array.isArray(group) &&
+              group.every((name) => typeof name === "string"),
+          )
+          .map(unique_specs)
+          .filter((group) => group.length > 1)
       : [];
   } catch {
     return [];
@@ -65,13 +67,10 @@ function read_merge_groups(storage_key: string): string[][] {
 
 /** All unique biomarker names across loaded exams, for the spec picker. */
 function available_specs(exams: ChartExam[]): string[] {
-  const names = new Set<string>();
-  for (const exam of exams) {
-    for (const b of exam.biomarkers) {
-      names.add(b.biomarker_name);
-    }
-  }
-  return Array.from(names).sort((a, b) => a.localeCompare(b));
+  const names = unique_specs(
+    exams.flatMap((exam) => exam.biomarkers.map((b) => b.biomarker_name)),
+  );
+  return names.sort((a, b) => a.localeCompare(b));
 }
 
 function nice_ticks(min: number, max: number, count = 5): number[] {
@@ -131,9 +130,11 @@ export function AnalyticsChart({
     );
     return merge_groups
       .map((group) =>
-        group
-          .map((name) => selected_by_key.get(normalized_spec(name)))
-          .filter((name): name is string => Boolean(name)),
+        unique_specs(
+          group
+            .map((name) => selected_by_key.get(normalized_spec(name)))
+            .filter((name): name is string => Boolean(name)),
+        ),
       )
       .filter((group) => group.length > 1);
   }, [merge_groups, selected]);
