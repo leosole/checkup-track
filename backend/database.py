@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Iterator
 
+from sqlalchemy import inspect, text
 from sqlmodel import Session, SQLModel, create_engine
 
 from env_loader import load_env_files
@@ -107,6 +108,21 @@ def init_db() -> None:
     )
 
     SQLModel.metadata.create_all(engine)
+    columns = {
+        column["name"] for column in inspect(engine).get_columns("examprocessingjob")
+    }
+    if "requested_date" not in columns:
+        try:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE examprocessingjob ADD COLUMN requested_date DATE")
+                )
+        except Exception:
+            if "requested_date" not in {
+                column["name"]
+                for column in inspect(engine).get_columns("examprocessingjob")
+            }:
+                raise
 
 
 def get_session() -> Iterator[Session]:

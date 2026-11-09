@@ -339,12 +339,18 @@ export const api = {
     file: File,
     title?: string,
     on_progress?: (percent: number) => void,
+    date_performed?: string,
+    image_only = false,
   ): Promise<Exam> {
     const form = new FormData();
     form.append("file", file);
     if (title && title.trim()) {
       form.append("title", title.trim());
     }
+    if (date_performed) {
+      form.append("date_performed", date_performed);
+    }
+    form.append("image_only", String(image_only));
     const token = get_token();
     return new Promise((resolve, reject) => {
       const request = new XMLHttpRequest();

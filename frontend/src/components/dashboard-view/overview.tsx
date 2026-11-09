@@ -8,7 +8,6 @@ import { Card } from "../ui/badge";
 import { Button } from "../ui/button";
 import { DashboardExamList } from "./exam-list";
 import { DashboardMedicationSummary } from "./medication-summary";
-import { DASHBOARD_FIELD } from "./field";
 interface Notice {
   kind: "ok" | "err";
   text: string;
@@ -22,9 +21,6 @@ export interface DashboardOverviewData {
   displayed: Exam[];
   loading: boolean;
   load_error: string | null;
-  uploading: boolean;
-  upload_progress: number;
-  exam_name: string;
   notice: Notice | null;
   search_query: string;
   searching: boolean;
@@ -40,7 +36,6 @@ export interface DashboardOverviewData {
 export interface DashboardOverviewActions {
   on_upload: () => void;
   on_add_medication: () => void;
-  on_exam_name_change: (value: string) => void;
   on_clear_search: () => void;
   on_navigate: (route: DashboardRoute) => void;
   on_show_calendar_exam: (id: number) => void;
@@ -109,9 +104,6 @@ export function DashboardOverview({
     displayed,
     loading,
     load_error,
-    uploading,
-    upload_progress,
-    exam_name,
     notice,
     search_query,
     searching,
@@ -126,7 +118,6 @@ export function DashboardOverview({
   const {
     on_upload,
     on_add_medication,
-    on_exam_name_change,
     on_clear_search,
     on_navigate,
     on_show_calendar_exam,
@@ -150,18 +141,8 @@ export function DashboardOverview({
       <div className="flex flex-wrap items-center gap-3">
         {user?.capabilities.create_records && (
           <>
-            <input
-              type="text"
-              value={exam_name}
-              onChange={(event) => on_exam_name_change(event.target.value)}
-              placeholder="Exam name (optional)"
-              aria-label="Exam name for the next upload"
-              className={`${DASHBOARD_FIELD} w-56`}
-            />
-            <Button onClick={on_upload} loading={uploading}>
-              {uploading
-                ? `Uploading PDF… ${upload_progress}%`
-                : "Upload lab report PDF"}
+            <Button onClick={on_upload}>
+              Upload exam
             </Button>
             <Button variant="secondary" onClick={on_add_medication}>
               + Add medication
@@ -194,13 +175,6 @@ export function DashboardOverview({
           </button>
         )}
       </div>
-      {user?.capabilities.create_records && (
-        <p className="-mt-1 text-xs text-gray-400 dark:text-gray-500">
-          Leave the exam name empty to use the report&apos;s own title, falling
-          back to the PDF file name.
-        </p>
-      )}
-
       {load_error && (
         <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
           {load_error}
@@ -211,7 +185,7 @@ export function DashboardOverview({
         <StatCard
           label="Exams on file"
           value={exams.length}
-          hint="Parsed lab reports"
+          hint="Uploaded records"
           tone="brand"
         />
         <StatCard

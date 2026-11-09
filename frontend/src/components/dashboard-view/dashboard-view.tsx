@@ -5,7 +5,6 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Button } from "../ui/button";
 import { useNavigate } from "@tanstack/react-router";
 import {
   api,
@@ -36,7 +35,8 @@ import type { DashboardRoute } from "./types";
 
 export interface DashboardRouteContent {
   overview_data: DashboardOverviewData;
-  overview_actions: DashboardOverviewActions;    exams: {
+  overview_actions: DashboardOverviewActions;
+  exams: {
     exams: Exam[];
     on_back: () => void;
     on_open_pdf: (id: number) => void;
@@ -47,8 +47,6 @@ export interface DashboardRouteContent {
     on_retry_exam: (id: number) => void;
     retrying_exam_id: number | null;
     retry_error: string | null;
-    uploading: boolean;
-    upload_progress: number;
     notice: { kind: "ok" | "err"; text: string } | null;
   };
   medications: {
@@ -92,21 +90,17 @@ export function DashboardLayout({
   const [searching, set_searching] = useState(false);
   const [loading, set_loading] = useState(true);
   const [load_error, set_load_error] = useState<string | null>(null);
-  const [upload_progress, _set_upload_progress] = useState(0);
-  const [uploading, set_uploading] = useState(false);
-
   const [retrying_exam_id, set_retrying_exam_id] = useState<number | null>(
     null,
   );
   const [retry_error, _set_retry_error] = useState<string | null>(null);
-  const [exam_name, set_exam_name] = useState("");
   const [notice, set_notice] = useState<{
     kind: "ok" | "err";
     text: string;
   } | null>(null);
   const [modal_open, set_modal_open] = useState(false);
   const [editing_med, set_editing_med] = useState<Medication | null>(null);
-  const [upload_exam, set_upload_exam] = useState<Exam | null>(null);
+  const [upload_exam_open, set_upload_exam_open] = useState(false);
   const [renaming_id, set_renaming_id] = useState<number | null>(null);
   const [rename_value, set_rename_value] = useState("");
   const [theme, set_theme] = useState<Theme>(() => init_theme());
@@ -220,14 +214,14 @@ export function DashboardLayout({
       if (!opened) {
         set_notice({
           kind: "err",
-          text: "The browser blocked the PDF tab. Allow pop-ups and retry.",
+          text: "The browser blocked the file tab. Allow pop-ups and retry.",
         });
       }
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       set_notice({
         kind: "err",
-        text: err instanceof Error ? err.message : "Could not open the PDF.",
+        text: err instanceof Error ? err.message : "Could not open the exam file.",
       });
     }
   }
@@ -236,6 +230,7 @@ export function DashboardLayout({
     const exam = exams.find((item) => item.id === exam_id);
     if (exam) {
       set_calendar_item_error(null);
+      _set_retry_error(null);
       set_calendar_item({ kind: "exam", exam });
     }
   }
@@ -256,6 +251,7 @@ export function DashboardLayout({
     const medication = medications.find((item) => item.id === medication_id);
     if (medication) {
       set_calendar_item_error(null);
+      _set_retry_error(null);
       set_calendar_item({ kind: "medication", medication });
     }
   }
@@ -269,16 +265,22 @@ export function DashboardLayout({
       const anchor = document.createElement("a");
       const stem = exam.title
         .replace(/[^A-Za-z0-9._-]+/g, "_")
-        .replace(/^[_\.]+|[_\.]+$/g, "");
+        .replace(/^[_\\.]+|[_\\.]+$/g, "");
       anchor.href = url;
-      anchor.download = `${stem || "exam"}.pdf`;
+      const suffix = exam.pdf_path.split(".").pop()?.toLowerCase();
+      const extension = ["pdf", "jpg", "jpeg", "png", "webp"].includes(
+        suffix ?? "",
+      )
+        ? suffix
+        : "pdf";
+      anchor.download = `${stem || "exam"}.${extension}`;
       document.body.append(anchor);
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       set_calendar_item_error(
-        err instanceof Error ? err.message : "Could not download the PDF.",
+        err instanceof Error ? err.message : "Could not download the exam file.",
       );
     } finally {
       set_calendar_action_busy(false);
@@ -403,6 +405,7 @@ export function DashboardLayout({
   async function retry_exam(id: number) {
     if (!user?.capabilities.retry_extraction) return;
     set_retrying_exam_id(id);
+    _set_retry_error(null);
     try {
       const updated = await api.retry_exam_extraction(id);
       set_exams((current) =>
@@ -412,7 +415,15 @@ export function DashboardLayout({
         (current) =>
           current?.map((exam) => (exam.id === id ? updated : exam)) ?? null,
       );
+      set_calendar_item((current) =>
+        current?.kind === "exam" && current.exam.id === id
+          ? { ...current, exam: updated }
+          : current,
+      );
     } catch (err) {
+      _set_retry_error(
+        err instanceof Error ? err.message : "Could not retry extraction.",
+      );
       set_notice({
         kind: "err",
         text:
@@ -444,9 +455,6 @@ export function DashboardLayout({
       displayed,
       loading,
       load_error,
-      uploading,
-      upload_progress,
-      exam_name,
       notice,
       search_query,
       searching,
@@ -459,13 +467,12 @@ export function DashboardLayout({
       plot_markers,
     },
     overview_actions: {
-      on_upload: () => set_upload_exam((current) => (current ? null : null)),
+      on_upload: () => set_upload_exam_open(true),
       on_add_medication: () => {
         if (!user?.capabilities.create_records) return;
         set_editing_med(null);
         set_modal_open(true);
       },
-      on_exam_name_change: set_exam_name,
       on_clear_search: () => set_search_query(""),
       on_navigate: navigate,
       on_show_calendar_exam: show_calendar_exam,
@@ -513,12 +520,10 @@ export function DashboardLayout({
         }));
         await refresh();
       },
-      on_upload: () => set_upload_exam((current) => (current ? null : null)),
+      on_upload: () => set_upload_exam_open(true),
       on_retry_exam: (id) => void retry_exam(id),
       retrying_exam_id,
       retry_error,
-      uploading,
-      upload_progress,
       notice,
     },
     medications: {
@@ -540,34 +545,9 @@ export function DashboardLayout({
     },
     loading,
     on_back,
-  };    return (
+  };
+  return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      {user?.capabilities.create_records && (
-        <Button
-          type="button"
-          onClick={() => set_upload_exam((current) => (current ? null : null))}
-          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm bg-brand-600 hover:bg-brand-700 transition focus-visible:outline-brand-600"
-        >
-          <svg
-            className="h-4 w-4"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              fillRule="evenodd"
-              d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-              clipRule="evenodd"
-            />
-            <path
-              fillRule="evenodd"
-              d="M4.22 14.78a.75.75 0 011.06 0L8.5 17.94l3.22-3.16a.75.75 0 111.06 1.06l-4.5-4.5a.75.75 0 010-1.06z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Upload lab report
-        </Button>
-      )}
       <DashboardHeader
         user={user}
         route={route}
@@ -583,14 +563,15 @@ export function DashboardLayout({
       {children(content)}
 
       <UploadExamModal
-        open={upload_exam !== null}
-        on_close={() => set_upload_exam(null)}
+        open={upload_exam_open}
+        on_close={() => set_upload_exam_open(false)}
         on_saved={(saved) => {
-          set_upload_exam(null);
-          set_uploading(false);
+          set_upload_exam_open(false);
           set_notice({
             kind: "ok",
-            text: `“${saved.title}” uploaded. Extraction queued.`,
+            text: saved.processing
+              ? `“${saved.title}” uploaded. Extraction queued.`
+              : `“${saved.title}” saved without parsing.`,
           });
           void refresh();
         }}
@@ -641,6 +622,7 @@ export function DashboardLayout({
         }}
         on_retry_exam={(id) => void retry_exam(id)}
         retry_error={retry_error}
+        retrying_exam_id={retrying_exam_id}
       />
     </div>
   );

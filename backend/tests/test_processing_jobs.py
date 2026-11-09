@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -80,16 +80,46 @@ class ProcessingJobModelTests(unittest.TestCase):
         self.assertEqual(reclaimed, self.exam.id)
 
     def test_enqueue_persists_exam_and_queued_job_without_extraction(self) -> None:
+        requested_date = date(2026, 1, 2)
         with (
             patch("parser.engine", self.engine),
             patch("parser._save_raw_pdf", return_value="storage/pdfs/new.pdf"),
             patch("parser._extract_structured") as extract,
         ):
-            response = parser.enqueue_exam(b"%PDF-1.4\n", "new.pdf", "user-1")
+            response = parser.enqueue_exam(
+                b"%PDF-1.4\n", "new.pdf", "user-1", requested_date=requested_date
+            )
 
         self.assertEqual(response.processing.status, "queued")
         self.assertEqual(response.processing.completed_chunks, 0)
         self.assertEqual(response.title, "new")
+        self.assertEqual(response.date_performed, requested_date)
+        self.assertEqual(
+            self.session.get(ExamProcessingJob, response.id).requested_date,
+            requested_date,
+        )
+        extract.assert_not_called()
+
+    def test_save_only_image_creates_no_processing_job(self) -> None:
+        requested_date = date(2026, 2, 3)
+        image_bytes = b"\x89PNG\r\n\x1a\nimage-data"
+        with (
+            patch("parser.engine", self.engine),
+            patch("parser._save_exam_file", return_value="storage/pdfs/scan.png"),
+            patch("parser._extract_structured") as extract,
+        ):
+            response = parser.save_exam_without_extraction(
+                image_bytes,
+                "scan.png",
+                "user-1",
+                "Scan",
+                requested_date,
+            )
+
+        self.assertIsNone(response.processing)
+        self.assertEqual(response.title, "Scan")
+        self.assertEqual(response.date_performed, requested_date)
+        self.assertIsNone(self.session.get(ExamProcessingJob, response.id))
         extract.assert_not_called()
 
     def test_exam_response_includes_persisted_processing_status(self) -> None:
@@ -178,7 +208,10 @@ class ProcessingJobModelTests(unittest.TestCase):
             patch("parser.engine", self.engine),
             patch("parser._save_raw_pdf", return_value="storage/pdfs/new.pdf"),
         ):
-            queued = parser.enqueue_exam(b"%PDF-1.4\n", "new.pdf", "user-1")
+            requested_date = date(2026, 3, 4)
+            queued = parser.enqueue_exam(
+                b"%PDF-1.4\n", "new.pdf", "user-1", requested_date=requested_date
+            )
 
         chunk_results = [
             LLMExamsExtractionSchema(
@@ -218,6 +251,7 @@ class ProcessingJobModelTests(unittest.TestCase):
         self.assertEqual(job.status, "completed")
         self.assertEqual((job.completed_chunks, job.total_chunks), (2, 2))
         self.assertEqual(exam.title, "New report")
+        self.assertEqual(exam.date_performed, requested_date)
         self.assertEqual({item.biomarker_name for item in biomarkers}, {"Glucose", "Sodium"})
 
     def test_worker_reschedules_rate_limited_job_without_marking_it_failed(self) -> None:
@@ -321,16 +355,61 @@ class UploadQueueRouteTests(unittest.IsolatedAsyncioTestCase):
             patch("main.enqueue_exam", return_value=response) as enqueue,
             patch("main.notify_worker") as notify,
         ):
-            result = await main.upload_exam(FakeUpload(), None, user)
+            result = await main.upload_exam(
+                FakeUpload(),
+                title=None,
+                date_performed=None,
+                image_only=False,
+                user=user,
+            )
 
         self.assertEqual(result.processing.status, "queued")
-        enqueue.assert_called_once_with(b"%PDF-1.4\n", "new.pdf", "user-1", None)
+        enqueue.assert_called_once_with(
+            b"%PDF-1.4\n", "new.pdf", "user-1", None, None
+        )
         notify.assert_called_once()
         upload_route = next(
             route for route in main.app.routes
             if getattr(route, "path", None) == "/api/exams/upload"
         )
         self.assertEqual(upload_route.status_code, 202)
+
+    async def test_image_only_upload_is_saved_without_notifying_worker(self) -> None:
+        user = User(id="user-1", email="one@example.com", name="One")
+        response = ExamResponse(
+            id=6,
+            title="Chest X-ray",
+            date_performed="2026-11-09",
+            pdf_path="storage/pdfs/chest-xray.png",
+            markdown_path="",
+            processing=None,
+        )
+
+        class FakeUpload:
+            filename = "chest-xray.png"
+
+            async def read(self) -> bytes:
+                return b"image-bytes"
+
+        with (
+            patch("main.save_exam_without_extraction", return_value=response) as save_exam,
+            patch("main.enqueue_exam") as enqueue,
+            patch("main.notify_worker") as notify,
+        ):
+            result = await main.upload_exam(
+                FakeUpload(),
+                title="Chest X-ray",
+                date_performed=None,
+                image_only=True,
+                user=user,
+            )
+
+        self.assertEqual(result.title, "Chest X-ray")
+        save_exam.assert_called_once_with(
+            b"image-bytes", "chest-xray.png", "user-1", "Chest X-ray", None
+        )
+        enqueue.assert_not_called()
+        notify.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ export function CalendarItemModal({
   error,
   busy,
   retry_error,
+  retrying_exam_id,
   plot_markers,
   on_toggle_marker,
   on_close,
@@ -26,6 +27,7 @@ export function CalendarItemModal({
   error: string | null;
   busy: boolean;
   retry_error: string | null;
+  retrying_exam_id: number | null;
   plot_markers: string[];
   on_toggle_marker: (name: string) => void;
   on_close: () => void;
@@ -72,15 +74,18 @@ export function CalendarItemModal({
                 loading={busy}
                 onClick={on_download}
               >
-                Download PDF
+                Download file
               </Button>
             )}
-            {is_exam && item?.exam?.extraction_error && !busy && (
+            {is_exam &&
+              user?.capabilities.retry_extraction &&
+              item.exam.processing?.retry_allowed && (
               <Button
                 variant="secondary"
                 size="sm"
+                loading={retrying_exam_id === item.exam.id}
                 onClick={() => on_retry_exam(item.exam.id)}
-                disabled={retry_error !== null}
+                disabled={busy}
               >
                 Retry extraction
               </Button>
@@ -143,7 +148,7 @@ export function CalendarItemModal({
             </div>
             {item.exam.biomarkers.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                No biomarkers extracted.
+                No results are stored for this exam.
               </p>
             ) : (
               <>
@@ -279,7 +284,7 @@ export function CalendarItemModal({
           {error}
         </p>
       )}
-      {retry_error && (
+      {item?.kind === "exam" && retry_error && (
         <p
           role="alert"
           className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"

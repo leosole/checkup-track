@@ -97,8 +97,12 @@ export function DashboardExamList({
         <div className="space-y-4">
           {displayed.map((exam) => {
             const processing = exam.processing;
+            const saved_without_parsing =
+              !processing && exam.biomarkers.length === 0 && !exam.markdown_path;
             const status_label =
-              !processing || processing.status === "completed"
+              saved_without_parsing
+                ? "Saved without parsing"
+                : !processing || processing.status === "completed"
                 ? null
                 : processing.stage === "waiting_for_provider"
                   ? "Waiting for provider limit"
@@ -112,7 +116,7 @@ export function DashboardExamList({
                           ? `Extracting · ${processing.completed_chunks} of ${processing.total_chunks} chunks`
                           : "Preparing extraction";
             return (
-              <Card key={exam.id} className="p-5">
+              <Card key={exam.id} className="p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
                     {renaming_id === exam.id ? (
@@ -159,7 +163,11 @@ export function DashboardExamList({
                       {status_label ? (
                         <Badge
                           tone={
-                            processing?.status === "failed" ? "warning" : "info"
+                            saved_without_parsing
+                              ? "gray"
+                              : processing?.status === "failed"
+                                ? "warning"
+                                : "info"
                           }
                         >
                           {status_label}
@@ -167,7 +175,9 @@ export function DashboardExamList({
                       ) : (
                         <Badge
                           tone={
-                            exam.biomarkers.some(
+                            exam.biomarkers.length === 0
+                              ? "gray"
+                              : exam.biomarkers.some(
                               (biomarker) => biomarker.is_abnormal,
                             )
                               ? "danger"
@@ -178,43 +188,14 @@ export function DashboardExamList({
                             (biomarker) => biomarker.is_abnormal,
                           ).length > 0
                             ? `${exam.biomarkers.filter((biomarker) => biomarker.is_abnormal).length} out of range`
-                            : "All in range"}
+                            : exam.biomarkers.length === 0
+                              ? "No results"
+                              : "All in range"}
                         </Badge>
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-col items-stretch gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => on_open_exam_pdf(exam.id)}
-                    >
-                      <svg
-                        className="h-3.5 w-3.5 shrink-0"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path d="M4 3a2 2 0 00-2 2v2.5a.75.75 0 001.5 0V5a.5.5 0 01.5-.5h3.25a.75.75 0 000-1.5H4zM16 3h-3.25a.75.75 0 000 1.5H16a.5.5 0 01.5.5v2.5a.75.75 0 001.5 0V5a2 2 0 00-2-2zM3.5 12.5a.75.75 0 00-1.5 0V15a2 2 0 002 2h3.25a.75.75 0 000-1.5H4a.5.5 0 01-.5-.5v-2.5zM17.5 12.5a.75.75 0 00-1.5 0V15a.5.5 0 01-.5.5h-3.25a.75.75 0 000 1.5H16a2 2 0 002-2v-2.5z" />
-                      </svg>
-                      Open PDF
-                    </Button>
-                    {user?.capabilities.retry_extraction &&
-                      processing?.retry_allowed && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          loading={retrying_exam_id === exam.id}
-                          onClick={() => on_retry_exam(exam.id)}
-                        >
-                          Retry extraction
-                        </Button>
-                      )}
-                      {retry_error && processing?.status === "failed" && (
-                        <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
-                          {retry_error}
-                        </p>
-                      )}
+                  <div className="flex flex-row flex-wrap items-center gap-2 sm:flex-col sm:items-stretch">
                     {renaming_id !== exam.id && (
                       <div className="flex flex-wrap justify-end gap-1">
                         <button
@@ -256,6 +237,37 @@ export function DashboardExamList({
                           </button>
                         )}
                       </div>
+                    )}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => on_open_exam_pdf(exam.id)}
+                    >
+                      <svg
+                        className="h-3.5 w-3.5 shrink-0"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path d="M4 3a2 2 0 00-2 2v2.5a.75.75 0 001.5 0V5a.5.5 0 01.5-.5h3.25a.75.75 0 000-1.5H4zM16 3h-3.25a.75.75 0 000 1.5H16a.5.5 0 01.5.5v2.5a.75.75 0 001.5 0V5a2 2 0 00-2-2zM3.5 12.5a.75.75 0 00-1.5 0V15a2 2 0 002 2h3.25a.75.75 0 000-1.5H4a.5.5 0 01-.5-.5v-2.5zM17.5 12.5a.75.75 0 00-1.5 0V15a.5.5 0 01-.5.5h-3.25a.75.75 0 000 1.5H16a2 2 0 002-2v-2.5z" />
+                      </svg>
+                      Open file
+                    </Button>
+                    {user?.capabilities.retry_extraction &&
+                      processing?.retry_allowed && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          loading={retrying_exam_id === exam.id}
+                          onClick={() => on_retry_exam(exam.id)}
+                        >
+                          Retry extraction
+                        </Button>
+                      )}
+                    {retry_error && processing?.status === "failed" && (
+                      <p role="alert" className="w-full text-xs text-rose-600 dark:text-rose-400">
+                        {retry_error}
+                      </p>
                     )}
                   </div>
                 </div>

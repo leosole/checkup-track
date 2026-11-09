@@ -44,6 +44,7 @@ class ExamProcessingJob(SQLModel, table=True):
     partial_results_json: str = Field(default="[]")
     error: Optional[str] = None
     requested_title: Optional[str] = None
+    requested_date: Optional[date] = None
     attempts: int = Field(default=0)
     next_attempt_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     lease_expires_at: Optional[datetime] = None

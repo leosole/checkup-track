@@ -204,23 +204,79 @@ def _merge_extractions(
     )
 
 
+def _save_exam_file(file_bytes: bytes, original_name: str, content_type: str) -> str:
+    """Persist an exam file (B2 when configured, else storage/pdfs/)."""
+    suffix = Path(original_name or "exam.pdf").suffix.lower() or ".pdf"
+    stem = Path(original_name or "exam").stem
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._") or "exam"
+    stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    unique = f"{stem}_{stamp}_{uuid.uuid4().hex[:8]}{suffix}"
+    if object_storage.is_remote_enabled():
+        key = f"exams/{unique}"
+        object_storage.upload_pdf(file_bytes, key, content_type)
+        return key
+    PDF_DIR.mkdir(parents=True, exist_ok=True)
+    (PDF_DIR / unique).write_bytes(file_bytes)
+    return f"storage/pdfs/{unique}"
+
+
 def _save_raw_pdf(pdf_bytes: bytes, original_name: str) -> str:
     """Step 1: persist the PDF (B2 when configured, else storage/pdfs/).
 
     Returns the storage reference: "exams/<name>.pdf" for remote objects or
     "storage/pdfs/<name>.pdf" for the local fallback.
     """
-    stem = Path(original_name or "exam").stem
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._") or "exam"
-    stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    unique = f"{stem}_{stamp}_{uuid.uuid4().hex[:8]}.pdf"
-    if object_storage.is_remote_enabled():
-        key = f"exams/{unique}"
-        object_storage.upload_pdf(pdf_bytes, key)
-        return key
-    PDF_DIR.mkdir(parents=True, exist_ok=True)
-    (PDF_DIR / unique).write_bytes(pdf_bytes)
-    return f"storage/pdfs/{unique}"
+    pdf_name = f"{Path(original_name or 'exam').stem}.pdf"
+    return _save_exam_file(pdf_bytes, pdf_name, "application/pdf")
+
+
+def save_exam_without_extraction(
+    file_bytes: bytes,
+    filename: str,
+    user_id: str,
+    title: Optional[str] = None,
+    date_performed: Optional[date] = None,
+) -> ExamResponse:
+    """Persist an image exam without creating an extraction job."""
+    if not file_bytes:
+        raise ValueError("The uploaded file is empty.")
+
+    suffix = Path(filename).suffix.lower()
+    image_types = {
+        ".jpg": ("image/jpeg", file_bytes.startswith(b"\xff\xd8\xff")),
+        ".jpeg": ("image/jpeg", file_bytes.startswith(b"\xff\xd8\xff")),
+        ".png": ("image/png", file_bytes.startswith(b"\x89PNG\r\n\x1a\n")),
+        ".webp": (
+            "image/webp",
+            file_bytes.startswith(b"RIFF") and file_bytes[8:12] == b"WEBP",
+        ),
+    }
+    if suffix == ".pdf":
+        if not file_bytes.lstrip()[:5].startswith(b"%PDF"):
+            raise ValueError("The uploaded file is not a valid PDF.")
+        content_type = "application/pdf"
+    elif suffix in image_types and image_types[suffix][1]:
+        content_type = image_types[suffix][0]
+    else:
+        raise ValueError("Choose a valid PDF, JPEG, PNG, or WebP image.")
+
+    file_ref = _save_exam_file(file_bytes, filename, content_type)
+    exam = Exam(
+        user_id=user_id,
+        title=(title or "").strip() or Path(filename).stem or "Untitled exam",
+        date_performed=date_performed or datetime.now(timezone.utc).date(),
+        pdf_path=file_ref,
+        markdown_path="",
+    )
+    try:
+        with Session(engine) as session:
+            session.add(exam)
+            session.commit()
+            session.refresh(exam)
+            return _to_response(exam, [])
+    except Exception:
+        _discard_pdf(file_ref)
+        raise
 
 
 def _load_pdf_bytes(ref: str) -> bytes:
@@ -506,6 +562,7 @@ def enqueue_exam(
     filename: str,
     user_id: str,
     title: Optional[str] = None,
+    requested_date: Optional[date] = None,
 ) -> ExamResponse:
     """Store a valid PDF and create its durable extraction job without parsing it."""
     if not pdf_bytes:
@@ -519,11 +576,14 @@ def enqueue_exam(
     exam = Exam(
         user_id=user_id,
         title=requested_title or fallback_title,
-        date_performed=datetime.now(timezone.utc).date(),
+        date_performed=requested_date or datetime.now(timezone.utc).date(),
         pdf_path=pdf_ref,
         markdown_path="",
     )
-    job = ExamProcessingJob(requested_title=requested_title)
+    job = ExamProcessingJob(
+        requested_title=requested_title,
+        requested_date=requested_date,
+    )
 
     try:
         with Session(engine) as session:
@@ -559,6 +619,7 @@ def _update_processing_job(exam_id: int, **values) -> None:
 def process_exam_job(exam_id: int) -> None:
     """Convert, extract, and persist one claimed exam job, checkpointing each chunk."""
     stage = "converting"
+    requested_date: Optional[date] = None
     try:
         with Session(engine) as session:
             exam = session.get(Exam, exam_id)
@@ -567,6 +628,7 @@ def process_exam_job(exam_id: int) -> None:
                 return
             pdf_ref = exam.pdf_path
             user_id = exam.user_id
+            requested_date = job.requested_date
 
         _update_processing_job(exam_id, status="processing", stage=stage, error=None)
         pdf_bytes = _load_pdf_bytes(pdf_ref)
@@ -633,7 +695,9 @@ def process_exam_job(exam_id: int) -> None:
                 return
             if not requested_title and merged.title:
                 exam.title = merged.title
-            exam.date_performed = merged.date_performed or _fallback_date(markdown)
+            exam.date_performed = (
+                requested_date or merged.date_performed or _fallback_date(markdown)
+            )
             existing = session.exec(
                 select(ExamBiomarker).where(ExamBiomarker.exam_id == exam_id)
             ).all()

@@ -34,6 +34,7 @@ export function UploadExamModal({
       set_date_performed("");
       set_image_only(false);
       set_error(null);
+      if (file_input_ref.current) file_input_ref.current.value = "";
     }
   }, [open]);
 
@@ -49,24 +50,30 @@ export function UploadExamModal({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) {
-      set_error("Choose a PDF file to upload first.");
+      set_error("Choose an exam file to upload first.");
       return;
     }
-    if (!date_performed) {
-      set_error("Pick the exam date.");
+    if (!image_only && !file.name.toLowerCase().endsWith(".pdf")) {
+      set_error("Choose a PDF or turn on Image exam to save an image file.");
       return;
     }
     set_uploading(true);
     set_error(null);
+    set_upload_progress(0);
     try {
-      const exam = await api.upload_exam(file, title || undefined, (percent) => {
-        set_upload_progress(percent);
-      });
+      const exam = await api.upload_exam(
+        file,
+        title || undefined,
+        set_upload_progress,
+        date_performed || undefined,
+        image_only,
+      );
       set_upload_progress(100);
       set_file(null);
       set_title("");
       set_date_performed("");
       set_image_only(false);
+      if (file_input_ref.current) file_input_ref.current.value = "";
       await on_saved(exam);
     } catch (err) {
       set_error(err instanceof Error ? err.message : "Upload failed.");
@@ -78,8 +85,8 @@ export function UploadExamModal({
   return (
     <Modal
       open={open}
-      title="Upload lab report"
-      subtitle="Name the exam, pick a date, and choose how this file should be stored."
+      title="Upload exam"
+      subtitle="Add a report PDF for extraction or save an image exam without parsing."
       onClose={on_close}
       footer={
         <>
@@ -92,7 +99,7 @@ export function UploadExamModal({
             loading={uploading}
             disabled={!file}
           >
-            {uploading ? "Uploading…" : "Save exam"}
+            {uploading ? "Uploading…" : image_only ? "Save exam" : "Upload exam"}
           </Button>
         </>
       }
@@ -113,7 +120,7 @@ export function UploadExamModal({
 
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Exam file (PDF only)
+            Exam file
           </label>
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg bg-gray-50 px-3 py-2.5 ring-1 ring-inset ring-gray-300 dark:bg-gray-900 dark:ring-gray-700">
@@ -134,13 +141,13 @@ export function UploadExamModal({
               onClick={pick_file}
               disabled={uploading}
             >
-              Browse
+              Choose file
             </Button>
           </div>
           <input
             ref={file_input_ref}
             type="file"
-            accept="application/pdf,.pdf"
+            accept={image_only ? "application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png,image/webp,.webp" : "application/pdf,.pdf"}
             className="hidden"
             onChange={(event) => {
               const selected = event.target.files?.[0] ?? null;
@@ -148,9 +155,12 @@ export function UploadExamModal({
             }}
           />
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            This guide stores the report PDF only. It is never parsed.
+            {image_only
+              ? "PDF, JPEG, PNG, and WebP files are saved without extraction."
+              : "PDF reports are parsed into biomarkers after upload."}
           </p>
         </div>
+
         {uploading && (
           <div className="mt-2">
             <div className="h-1.5 rounded-full bg-gray-200 dark:bg-gray-700">
@@ -164,30 +174,33 @@ export function UploadExamModal({
         )}
 
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Exam name <span className="text-gray-400">(optional)</span>
-          </label>
           <Input
+            label="Exam name (optional)"
             value={title}
             onChange={(event) => set_title(event.target.value)}
-            placeholder="Auto generated from the file name if left blank"
+            placeholder={
+              image_only ? "Uses the file name" : "Uses the report title or file name"
+            }
             maxLength={200}
           />
         </div>
 
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Date performed
-          </label>
           <Input
+            label="Date performed (optional)"
             type="date"
             value={date_performed}
             onChange={(event) => set_date_performed(event.target.value)}
-            required
+            max={new Date().toISOString().slice(0, 10)}
           />
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            {image_only
+              ? "Leave blank to use today's date."
+              : "Leave blank to use the date in the report, or today if unavailable."}
+          </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="space-y-2">
           <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2.5 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 dark:ring-gray-700 dark:hover:bg-gray-900">
             <input
               type="checkbox"
@@ -199,18 +212,12 @@ export function UploadExamModal({
               Image exam
             </span>
           </label>
-          <p className="text-xs text-gray-400 dark:text-gray-500">
-            Mark image exams so they are saved but never sent to an LLM.
-          </p>
+          {image_only && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+              Naming and dating image exams is recommended so they are easy to find, but both fields are optional.
+            </p>
+          )}
         </div>
-
-        {image_only && (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-            Name the exam and pick the date so this report is searchable and
-            visible in your calendar. Both stay optional — you can leave them
-            blank and they will default to the file name and today&apos;s date.
-          </p>
-        )}
       </form>
     </Modal>
   );

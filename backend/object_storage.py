@@ -64,11 +64,11 @@ def _b2_s3_endpoint() -> str:
     return data["apiInfo"]["storageApi"]["s3ApiUrl"]
 
 
-def upload_pdf(pdf_bytes: bytes, key: str) -> None:
-    """Store a PDF. key looks like exams/<uuid>.pdf."""
+def upload_pdf(pdf_bytes: bytes, key: str, content_type: str = "application/pdf") -> None:
+    """Store an exam file. key looks like exams/<uuid>.<extension>."""
     if not _ENABLED:
         return  # caller handles the local fallback
-    _client().put_object(Bucket=_BUCKET, Key=key, Body=pdf_bytes, ContentType="application/pdf")
+    _client().put_object(Bucket=_BUCKET, Key=key, Body=pdf_bytes, ContentType=content_type)
 
 
 def download_pdf(key: str) -> bytes:

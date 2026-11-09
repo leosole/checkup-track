@@ -18,8 +18,7 @@ export function ExamsView({
   on_upload,
   on_retry_exam,
   retrying_exam_id,
-  uploading,
-  upload_progress,
+  retry_error,
   notice,
 }: {
   exams: Exam[];
@@ -31,8 +30,7 @@ export function ExamsView({
   on_upload: () => void;
   on_retry_exam: (id: number) => void;
   retrying_exam_id: number | null;
-  uploading: boolean;
-  upload_progress: number;
+  retry_error: string | null;
   notice: { kind: "ok" | "err"; text: string } | null;
 }) {
   const { user } = use_auth();
@@ -50,8 +48,11 @@ export function ExamsView({
       const has_abnormal = exam.biomarkers.some(
         (biomarker) => biomarker.is_abnormal,
       );
+      const saved_without_parsing =
+        !exam.processing && exam.biomarkers.length === 0 && !exam.markdown_path;
       const has_extracted_results =
-        !exam.processing || exam.processing.status === "completed";
+        !saved_without_parsing &&
+        (!exam.processing || exam.processing.status === "completed");
       const matches_query =
         !normalized_query ||
         exam.title.toLowerCase().includes(normalized_query) ||
@@ -133,8 +134,8 @@ export function ExamsView({
           </div>
         </div>
         {user?.capabilities.create_records && (
-          <Button onClick={on_upload} loading={uploading}>
-            {uploading ? `Uploading PDF… ${upload_progress}%` : "Add exam"}
+          <Button onClick={on_upload}>
+            Add exam
           </Button>
         )}
       </div>
@@ -267,8 +268,12 @@ export function ExamsView({
                   (biomarker) => biomarker.is_abnormal,
                 ).length;
                 const processing = exam.processing;
+                const saved_without_parsing =
+                  !processing && exam.biomarkers.length === 0 && !exam.markdown_path;
                 const status_label =
-                  !processing || processing.status === "completed"
+                  saved_without_parsing
+                    ? "Saved without parsing"
+                    : !processing || processing.status === "completed"
                     ? null
                     : processing.stage === "waiting_for_provider"
                       ? "Waiting for provider limit"
@@ -302,7 +307,9 @@ export function ExamsView({
                         <div className="space-y-1">
                           <Badge
                             tone={
-                              processing?.status === "failed"
+                              saved_without_parsing
+                                ? "gray"
+                                : processing?.status === "failed"
                                 ? "warning"
                                 : "info"
                             }
@@ -316,33 +323,25 @@ export function ExamsView({
                           )}
                         </div>
                       ) : (
-                        <Badge tone={abnormal_count ? "danger" : "success"}>
+                        <Badge
+                          tone={
+                            saved_without_parsing || exam.biomarkers.length === 0
+                              ? "gray"
+                              : abnormal_count
+                                ? "danger"
+                                : "success"
+                          }
+                        >
                           {abnormal_count
                             ? `${abnormal_count} out of range`
-                            : "All in range"}
+                                : exam.biomarkers.length === 0
+                                  ? "No results"
+                                  : "All in range"}
                         </Badge>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => on_open_pdf(exam.id)}
-                        >
-                          Open PDF
-                        </Button>
-                        {user?.capabilities.retry_extraction &&
-                          processing?.retry_allowed && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              loading={retrying_exam_id === exam.id}
-                              onClick={() => on_retry_exam(exam.id)}
-                            >
-                              Retry
-                            </Button>
-                          )}
                         <button
                           type="button"
                           aria-label={`Edit ${exam.title}`}
@@ -381,6 +380,29 @@ export function ExamsView({
                               />
                             </svg>
                           </button>
+                        )}
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => on_open_pdf(exam.id)}
+                        >
+                          Open file
+                        </Button>
+                        {user?.capabilities.retry_extraction &&
+                          processing?.retry_allowed && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={retrying_exam_id === exam.id}
+                              onClick={() => on_retry_exam(exam.id)}
+                            >
+                              Retry extraction
+                            </Button>
+                          )}
+                        {retry_error && processing?.status === "failed" && (
+                          <p role="alert" className="max-w-xs text-left text-xs text-rose-600 dark:text-rose-400">
+                            {retry_error}
+                          </p>
                         )}
                       </div>
                     </td>

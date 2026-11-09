@@ -94,7 +94,7 @@ from models import (
     UserProviderCredential,
     UserResponse,
 )
-from parser import enqueue_exam, search_exams
+from parser import enqueue_exam, save_exam_without_extraction, search_exams
 from test_user import (
     ensure_test_user,
     prepare_test_share,
@@ -405,22 +405,29 @@ def _exam_to_response(
 async def upload_exam(
     file: UploadFile = File(...),
     title: Optional[str] = Form(default=None),
+    date_performed: Optional[date] = Form(default=None),
+    image_only: bool = Form(default=False),
     user: User = Depends(require_capability("create_records")),
 ) -> ExamResponse:
-    """Accept and persist a PDF, then enqueue background extraction.
+    """Persist an exam file, queueing extraction unless it is image-only.
 
     ``title`` lets the user name the exam; blank means "use the report's own
     title, then the PDF file name".
     """
     filename = file.filename or "exam.pdf"
-    if not filename.lower().endswith(".pdf"):
+    if not image_only and not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-    pdf_bytes = await file.read()
-    if len(pdf_bytes) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="PDF exceeds the 25 MB upload limit.")
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File exceeds the 25 MB upload limit.")
     try:
-        exam = enqueue_exam(pdf_bytes, filename, user.id, title)
-        notify_worker()
+        if image_only:
+            exam = save_exam_without_extraction(
+                file_bytes, filename, user.id, title, date_performed
+            )
+        else:
+            exam = enqueue_exam(file_bytes, filename, user.id, title, date_performed)
+            notify_worker()
         return exam
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -428,7 +435,7 @@ async def upload_exam(
         logger.exception("Exam processing failed")
         raise HTTPException(
             status_code=500,
-            detail="Failed to queue the PDF for processing.",
+            detail="Failed to save the uploaded exam.",
         ) from exc
 
 
@@ -601,10 +608,17 @@ def _read_exam_pdf(exam: Exam) -> bytes:
 
 def _pdf_response(exam: Exam, pdf_bytes: bytes) -> Response:
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", exam.title).strip("._") or f"exam-{exam.id}"
+    suffix = Path(exam.pdf_path).suffix.lower() or ".pdf"
+    media_type = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }.get(suffix, "application/pdf")
     return Response(
         content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{stem}.pdf"'},
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{stem}{suffix}"'},
     )
 
 
