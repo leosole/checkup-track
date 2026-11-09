@@ -7,7 +7,15 @@ from unittest.mock import patch
 import parser
 import job_worker
 import main
-from models import Exam, ExamBiomarker, ExamProcessingJob, LLMExamsExtractionSchema, User
+from models import (
+    Exam,
+    ExamBiomarker,
+    ExamProcessingJob,
+    LLMExamsExtractionSchema,
+    ShareExam,
+    ShareGrant,
+    User,
+)
 from models import ExamProcessingResponse, ExamResponse
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -196,6 +204,24 @@ class ProcessingJobModelTests(unittest.TestCase):
 
         self.assertIsNone(self.session.get(ExamProcessingJob, self.exam.id))
         self.assertIsNone(self.session.get(Exam, self.exam.id))
+
+    def test_deleting_exam_removes_its_share_references(self) -> None:
+        share = ShareGrant(
+            owner_id="user-1",
+            code_hash="hashed-code",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+        )
+        self.session.add(share)
+        self.session.commit()
+        self.session.add(ShareExam(share_id=share.id, exam_id=self.exam.id))
+        self.session.commit()
+
+        with patch("main.object_storage.delete_pdf"):
+            main.delete_exam(self.exam.id, self._owner(), self.session)
+
+        self.assertIsNone(
+            self.session.get(ShareExam, (share.id, self.exam.id))
+        )
 
     def _other_user(self) -> User:
         return User(id="user-2", email="two@example.com", name="Two")

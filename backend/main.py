@@ -564,11 +564,16 @@ def delete_exam(
     biomarkers = session.exec(
         select(ExamBiomarker).where(ExamBiomarker.exam_id == exam_id)
     ).all()
+    share_references = session.exec(
+        select(ShareExam).where(ShareExam.exam_id == exam_id)
+    ).all()
     job = session.get(ExamProcessingJob, exam_id)
     if job is not None:
         session.delete(job)
     for biomarker in biomarkers:
         session.delete(biomarker)
+    for share_reference in share_references:
+        session.delete(share_reference)
     session.delete(exam)
     session.commit()
 
