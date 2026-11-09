@@ -88,11 +88,11 @@ export function MedicationModal({
       onClose={onClose}
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
           <Button type="submit" form="medication-form" loading={saving}>
             {editing ? "Save changes" : "Save medication"}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
           </Button>
         </>
       }

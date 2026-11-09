@@ -23,7 +23,7 @@ export function Modal({ open, title, subtitle, onClose, children, footer }: Moda
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-gray-900/40 p-4 backdrop-blur-sm sm:items-center dark:bg-black/70"
+      className="fixed inset-0 z-50 flex flex-col bg-gray-900/40 p-4 backdrop-blur-sm sm:items-center sm:p-0 dark:bg-black/70"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -31,7 +31,7 @@ export function Modal({ open, title, subtitle, onClose, children, footer }: Moda
       aria-modal="true"
       aria-label={title}
     >
-      <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl bg-white p-6 shadow-untitled-lg sm:p-8 dark:bg-gray-900 dark:shadow-none dark:ring-1 dark:ring-white/10">
+      <div className="mx-auto w-full max-w-lg flex flex-col rounded-2xl bg-white shadow-untitled-lg sm:p-8 dark:bg-gray-900 dark:shadow-none dark:ring-1 dark:ring-white/10">
         <div className="flex shrink-0 items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>

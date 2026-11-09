@@ -33,6 +33,7 @@ export interface DashboardOverviewData {
   renaming_id: number | null;
   rename_value: string;
   retrying_exam_id: number | null;
+  retry_error: string | null;
   plot_markers: string[];
 }
 
@@ -50,6 +51,7 @@ export interface DashboardOverviewActions {
   on_rename_value_change: (value: string) => void;
   on_delete_exam: (exam: Exam) => void;
   on_retry_exam: (id: number) => void;
+  retry_error: string | null;
   on_open_exam_pdf: (id: number) => void;
   on_edit_medication: (medication: Medication) => void;
   on_delete_medication: (medication: Medication) => void;
@@ -118,6 +120,7 @@ export function DashboardOverview({
     renaming_id,
     rename_value,
     retrying_exam_id,
+    retry_error,
     plot_markers,
   } = data;
   const {
@@ -249,6 +252,7 @@ export function DashboardOverview({
         on_delete_exam={on_delete_exam}
         on_retry_exam={on_retry_exam}
         retrying_exam_id={retrying_exam_id}
+        retry_error={retry_error}
         on_open_exam_pdf={on_open_exam_pdf}
       />
 

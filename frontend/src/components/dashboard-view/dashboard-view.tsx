@@ -1,12 +1,11 @@
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
-  type ChangeEvent,
   type FormEvent,
   type ReactNode,
 } from "react";
+import { Button } from "../ui/button";
 import { useNavigate } from "@tanstack/react-router";
 import {
   api,
@@ -27,6 +26,7 @@ import {
 import { ExamRenameModal } from "../modal/exam-rename-modal";
 import { ManualExamModal } from "../modal/manual-exam-modal";
 import { MedicationModal } from "../modal/medication-modal";
+import { UploadExamModal } from "../modal/upload-exam-modal";
 import { DashboardHeader } from "./header";
 import type {
   DashboardOverviewActions,
@@ -36,8 +36,7 @@ import type { DashboardRoute } from "./types";
 
 export interface DashboardRouteContent {
   overview_data: DashboardOverviewData;
-  overview_actions: DashboardOverviewActions;
-  exams: {
+  overview_actions: DashboardOverviewActions;    exams: {
     exams: Exam[];
     on_back: () => void;
     on_open_pdf: (id: number) => void;
@@ -47,6 +46,7 @@ export interface DashboardRouteContent {
     on_upload: () => void;
     on_retry_exam: (id: number) => void;
     retrying_exam_id: number | null;
+    retry_error: string | null;
     uploading: boolean;
     upload_progress: number;
     notice: { kind: "ok" | "err"; text: string } | null;
@@ -92,11 +92,13 @@ export function DashboardLayout({
   const [searching, set_searching] = useState(false);
   const [loading, set_loading] = useState(true);
   const [load_error, set_load_error] = useState<string | null>(null);
+  const [upload_progress, _set_upload_progress] = useState(0);
   const [uploading, set_uploading] = useState(false);
-  const [upload_progress, set_upload_progress] = useState(0);
+
   const [retrying_exam_id, set_retrying_exam_id] = useState<number | null>(
     null,
   );
+  const [retry_error, _set_retry_error] = useState<string | null>(null);
   const [exam_name, set_exam_name] = useState("");
   const [notice, set_notice] = useState<{
     kind: "ok" | "err";
@@ -104,12 +106,12 @@ export function DashboardLayout({
   } | null>(null);
   const [modal_open, set_modal_open] = useState(false);
   const [editing_med, set_editing_med] = useState<Medication | null>(null);
+  const [upload_exam, set_upload_exam] = useState<Exam | null>(null);
   const [renaming_id, set_renaming_id] = useState<number | null>(null);
   const [rename_value, set_rename_value] = useState("");
   const [theme, set_theme] = useState<Theme>(() => init_theme());
   const { selected: plot_markers, toggle: toggle_plot_marker } =
     use_plot_markers();
-  const file_input_ref = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -341,33 +343,6 @@ export function DashboardLayout({
     set_calendar_item(null);
   }
 
-  async function handle_upload(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !user?.capabilities.create_records) return;
-    set_uploading(true);
-    set_upload_progress(0);
-    set_notice(null);
-    try {
-      const exam = await api.upload_exam(file, exam_name, set_upload_progress);
-      set_upload_progress(100);
-      set_exam_name("");
-      await refresh();
-      set_notice({
-        kind: "ok",
-        text: `“${exam.title}” uploaded. Extraction queued.`,
-      });
-    } catch (err) {
-      set_notice({
-        kind: "err",
-        text: err instanceof Error ? err.message : "Upload failed.",
-      });
-    } finally {
-      set_uploading(false);
-      window.setTimeout(() => set_upload_progress(0), 800);
-    }
-  }
-
   function keep_pdf_only() {
     if (manual_exam) {
       set_notice({
@@ -480,10 +455,11 @@ export function DashboardLayout({
       renaming_id,
       rename_value,
       retrying_exam_id,
+      retry_error,
       plot_markers,
     },
     overview_actions: {
-      on_upload: () => file_input_ref.current?.click(),
+      on_upload: () => set_upload_exam((current) => (current ? null : null)),
       on_add_medication: () => {
         if (!user?.capabilities.create_records) return;
         set_editing_med(null);
@@ -503,6 +479,7 @@ export function DashboardLayout({
       on_rename_value_change: set_rename_value,
       on_delete_exam: delete_exam,
       on_retry_exam: (id) => void retry_exam(id),
+      retry_error,
       on_open_exam_pdf: (id) => void open_exam_pdf(id),
       on_toggle_plot_marker: toggle_marker,
       on_edit_medication: (medication) => {
@@ -527,7 +504,7 @@ export function DashboardLayout({
       on_back,
       on_open_pdf: (id) => void open_exam_pdf(id),
       on_select_exam: (exam) => show_calendar_exam(exam.id),
-      on_edit: set_rename_modal_exam,
+      on_edit: (exam) => set_rename_modal_exam(exam),
       on_deleted: async (id) => {
         set_exams((current) => current.filter((exam) => exam.id !== id));
         set_calendar((current) => ({
@@ -536,9 +513,10 @@ export function DashboardLayout({
         }));
         await refresh();
       },
-      on_upload: () => file_input_ref.current?.click(),
+      on_upload: () => set_upload_exam((current) => (current ? null : null)),
       on_retry_exam: (id) => void retry_exam(id),
       retrying_exam_id,
+      retry_error,
       uploading,
       upload_progress,
       notice,
@@ -562,18 +540,33 @@ export function DashboardLayout({
     },
     loading,
     on_back,
-  };
-
-  return (
+  };    return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {user?.capabilities.create_records && (
-        <input
-          ref={file_input_ref}
-          type="file"
-          accept="application/pdf,.pdf"
-          className="hidden"
-          onChange={handle_upload}
-        />
+        <Button
+          type="button"
+          onClick={() => set_upload_exam((current) => (current ? null : null))}
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm bg-brand-600 hover:bg-brand-700 transition focus-visible:outline-brand-600"
+        >
+          <svg
+            className="h-4 w-4"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+              clipRule="evenodd"
+            />
+            <path
+              fillRule="evenodd"
+              d="M4.22 14.78a.75.75 0 011.06 0L8.5 17.94l3.22-3.16a.75.75 0 111.06 1.06l-4.5-4.5a.75.75 0 010-1.06z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Upload lab report
+        </Button>
       )}
       <DashboardHeader
         user={user}
@@ -589,6 +582,19 @@ export function DashboardLayout({
 
       {children(content)}
 
+      <UploadExamModal
+        open={upload_exam !== null}
+        on_close={() => set_upload_exam(null)}
+        on_saved={(saved) => {
+          set_upload_exam(null);
+          set_uploading(false);
+          set_notice({
+            kind: "ok",
+            text: `“${saved.title}” uploaded. Extraction queued.`,
+          });
+          void refresh();
+        }}
+      />
       <MedicationModal
         open={
           modal_open &&
@@ -633,6 +639,8 @@ export function DashboardLayout({
             void download_exam_file(calendar_item.exam);
           }
         }}
+        on_retry_exam={(id) => void retry_exam(id)}
+        retry_error={retry_error}
       />
     </div>
   );

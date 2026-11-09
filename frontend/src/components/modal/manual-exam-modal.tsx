@@ -43,6 +43,7 @@ export function ManualExamModal({
   const [biomarkers, set_biomarkers] = useState<BiomarkerDraft[]>([empty_biomarker()]);
   const [saving, set_saving] = useState(false);
   const [error, set_error] = useState<string | null>(null);
+  const [retry_error, set_retry_error] = useState<string | null>(null);
 
   useEffect(() => {
     if (!exam) return;
@@ -104,6 +105,20 @@ export function ManualExamModal({
     }
   }
 
+  async function retry_extraction() {
+    if (!exam) return;
+    set_retry_error(null);
+    try {
+      await api.retry_exam_extraction(exam.id);
+      set_error(null);
+      on_keep_pdf();
+    } catch (err) {
+      set_retry_error(
+        err instanceof Error ? err.message : "Retry extraction failed.",
+      );
+    }
+  }
+
   return (
     <Modal
       open={exam !== null}
@@ -123,6 +138,16 @@ export function ManualExamModal({
             <Button type="submit" form="manual-exam-form" loading={saving}>
               Save exam
             </Button>
+            {exam?.extraction_error && !saving && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={retry_extraction}
+                disabled={retry_error !== null}
+              >
+                Retry extraction
+              </Button>
+            )}
           </>
         ) : (
           <>
@@ -145,6 +170,11 @@ export function ManualExamModal({
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
               {error}
+            </p>
+          )}
+          {retry_error && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+              {retry_error}
             </p>
           )}
           <Input

@@ -13,22 +13,26 @@ export function CalendarItemModal({
   item,
   error,
   busy,
+  retry_error,
   plot_markers,
   on_toggle_marker,
   on_close,
   on_edit,
   on_delete,
   on_download,
+  on_retry_exam,
 }: {
   item: CalendarSelection | null;
   error: string | null;
   busy: boolean;
+  retry_error: string | null;
   plot_markers: string[];
   on_toggle_marker: (name: string) => void;
   on_close: () => void;
   on_edit: () => void;
   on_delete: () => void;
   on_download: () => void;
+  on_retry_exam: (id: number) => void;
 }) {
   const { user } = use_auth();
   const is_exam = item?.kind === "exam";
@@ -69,6 +73,16 @@ export function CalendarItemModal({
                 onClick={on_download}
               >
                 Download PDF
+              </Button>
+            )}
+            {is_exam && item?.exam?.extraction_error && !busy && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => on_retry_exam(item.exam.id)}
+                disabled={retry_error !== null}
+              >
+                Retry extraction
               </Button>
             )}
             {user?.capabilities.delete_records && (
@@ -263,6 +277,14 @@ export function CalendarItemModal({
           className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"
         >
           {error}
+        </p>
+      )}
+      {retry_error && (
+        <p
+          role="alert"
+          className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+        >
+          {retry_error}
         </p>
       )}
     </Modal>

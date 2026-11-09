@@ -27,6 +27,7 @@ interface DashboardExamListProps {
   on_delete_exam: (exam: Exam) => void;
   on_retry_exam: (id: number) => void;
   retrying_exam_id: number | null;
+  retry_error: string | null;
   on_open_exam_pdf: (id: number) => void;
 }
 
@@ -49,6 +50,7 @@ export function DashboardExamList({
   on_delete_exam,
   on_retry_exam,
   retrying_exam_id,
+  retry_error,
   on_open_exam_pdf,
 }: DashboardExamListProps) {
   const { user } = use_auth();
@@ -92,7 +94,7 @@ export function DashboardExamList({
           }
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
           {displayed.map((exam) => {
             const processing = exam.processing;
             const status_label =
@@ -111,12 +113,12 @@ export function DashboardExamList({
                           : "Preparing extraction";
             return (
               <Card key={exam.id} className="p-5">
-                <div className="flex items-start gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
                     {renaming_id === exam.id ? (
                       <form
                         onSubmit={(event) => void on_submit_rename(event, exam)}
-                        className="flex items-center gap-2"
+                        className="flex flex-wrap items-center gap-2"
                       >
                         <input
                           autoFocus
@@ -125,7 +127,7 @@ export function DashboardExamList({
                             on_rename_value_change(event.target.value)
                           }
                           aria-label="New exam name"
-                          className={`${DASHBOARD_FIELD} py-1 text-sm`}
+                          className={`${DASHBOARD_FIELD} flex-1 min-w-[200px] py-1 text-sm`}
                         />
                         <Button type="submit" size="sm">
                           Save
@@ -181,11 +183,10 @@ export function DashboardExamList({
                       )}
                     </div>
                   </div>
-                  <div className="flex w-32 shrink-0 flex-col items-stretch gap-2">
+                  <div className="flex flex-col items-stretch gap-2">
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="w-full"
                       onClick={() => on_open_exam_pdf(exam.id)}
                     >
                       <svg
@@ -203,15 +204,19 @@ export function DashboardExamList({
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="w-full"
                           loading={retrying_exam_id === exam.id}
                           onClick={() => on_retry_exam(exam.id)}
                         >
                           Retry extraction
                         </Button>
                       )}
+                      {retry_error && processing?.status === "failed" && (
+                        <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                          {retry_error}
+                        </p>
+                      )}
                     {renaming_id !== exam.id && (
-                      <div className="flex justify-end gap-1">
+                      <div className="flex flex-wrap justify-end gap-1">
                         <button
                           type="button"
                           aria-label={`Rename ${exam.title}`}
