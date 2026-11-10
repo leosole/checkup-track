@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { FiArrowDown, FiArrowUp, FiTrash2 } from "react-icons/fi";
+import { notify } from "./ui/toast";
 import {
   api,
   type ProviderCredentialStatus,
@@ -30,7 +31,6 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
   const [busy_provider, set_busy_provider] = useState<ProviderId | null>(null);
   const [ordering, set_ordering] = useState(false);
   const [error, set_error] = useState<string | null>(null);
-  const [notice, set_notice] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -62,11 +62,10 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
     if (!api_key) return;
     set_busy_provider(provider);
     set_error(null);
-    set_notice(null);
     try {
       set_providers(await api.save_provider_key(provider, api_key));
       set_api_keys((current) => ({ ...current, [provider]: "" }));
-      set_notice(`${PROVIDER_LABELS[provider]} key saved.`);
+      notify.success(`${PROVIDER_LABELS[provider]} key saved.`);
     } catch (err) {
       set_error(
         err instanceof Error ? err.message : "Could not save this API key.",
@@ -82,7 +81,6 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
       return;
     set_busy_provider(provider);
     set_error(null);
-    set_notice(null);
     try {
       await api.delete_provider_key(provider);
       set_providers((current) =>
@@ -90,7 +88,7 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
           item.provider === provider ? { ...item, configured: false } : item,
         ),
       );
-      set_notice(`${PROVIDER_LABELS[provider]} key removed.`);
+      notify.success(`${PROVIDER_LABELS[provider]} key removed.`);
     } catch (err) {
       set_error(
         err instanceof Error ? err.message : "Could not remove this API key.",
@@ -122,12 +120,11 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
     set_providers(reordered.map((item, order) => ({ ...item, order })));
     set_ordering(true);
     set_error(null);
-    set_notice(null);
     try {
       set_providers(
         await api.update_provider_order(reordered.map((item) => item.provider)),
       );
-      set_notice("Provider order saved.");
+      notify.success("Provider order saved.");
     } catch (err) {
       set_providers(previous);
       set_error(
@@ -187,15 +184,6 @@ export function ProfileView({ on_back }: { on_back: () => void }) {
           {error}
         </p>
       )}
-      {notice && (
-        <p
-          role="status"
-          className="mb-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-        >
-          {notice}
-        </p>
-      )}
-
       {loading ? (
         <div className="flex justify-center py-12">
           <Spinner className="h-8 w-8" />

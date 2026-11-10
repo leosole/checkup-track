@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { notify } from "./ui/toast";
 import { api, type Medication } from "../api-client";
 import { use_auth } from "../auth-context";
 import { format_date } from "../date-utils";
@@ -71,6 +72,7 @@ export function MedicationsView({
     try {
       await api.delete_medication(medication.id);
       await on_deleted(medication.id);
+      notify.success(`“${medication.name}” deleted.`);
     } catch (err) {
       set_error(
         err instanceof Error ? err.message : "Could not delete the medication.",

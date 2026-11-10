@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { notify } from "./ui/toast";
 import { api, type Exam } from "../api-client";
 import { use_auth } from "../auth-context";
 import { format_date } from "../date-utils";
@@ -19,7 +20,6 @@ export function ExamsView({
   on_retry_exam,
   retrying_exam_id,
   retry_error,
-  notice,
 }: {
   exams: Exam[];
   on_back: () => void;
@@ -31,7 +31,6 @@ export function ExamsView({
   on_retry_exam: (id: number) => void;
   retrying_exam_id: number | null;
   retry_error: string | null;
-  notice: { kind: "ok" | "err"; text: string } | null;
 }) {
   const { user } = use_auth();
   const [query, set_query] = useState("");
@@ -91,6 +90,7 @@ export function ExamsView({
     try {
       await api.delete_exam(exam.id);
       await on_deleted(exam.id);
+      notify.success(`“${exam.title}” deleted.`);
     } catch (err) {
       set_error(
         err instanceof Error ? err.message : "Could not delete the exam.",
@@ -139,15 +139,6 @@ export function ExamsView({
           </Button>
         )}
       </div>
-
-      {notice && (
-        <p
-          role={notice.kind === "err" ? "alert" : "status"}
-          className={`mb-4 rounded-lg px-4 py-3 text-sm ${notice.kind === "ok" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"}`}
-        >
-          {notice.text}
-        </p>
-      )}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <label className="sm:col-span-2 lg:col-span-2">

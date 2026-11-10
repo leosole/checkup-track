@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { notify } from "../ui/toast";
 import {
   api,
   type CalendarData,
@@ -47,7 +48,6 @@ export interface DashboardRouteContent {
     on_retry_exam: (id: number) => void;
     retrying_exam_id: number | null;
     retry_error: string | null;
-    notice: { kind: "ok" | "err"; text: string } | null;
   };
   medications: {
     medications: Medication[];
@@ -94,10 +94,6 @@ export function DashboardLayout({
     null,
   );
   const [retry_error, _set_retry_error] = useState<string | null>(null);
-  const [notice, set_notice] = useState<{
-    kind: "ok" | "err";
-    text: string;
-  } | null>(null);
   const [modal_open, set_modal_open] = useState(false);
   const [editing_med, set_editing_med] = useState<Medication | null>(null);
   const [upload_exam_open, set_upload_exam_open] = useState(false);
@@ -212,17 +208,15 @@ export function DashboardLayout({
       const url = URL.createObjectURL(blob);
       const opened = window.open(url, "_blank", "noopener,noreferrer");
       if (!opened) {
-        set_notice({
-          kind: "err",
-          text: "The browser blocked the file tab. Allow pop-ups and retry.",
-        });
+        notify.error(
+          "The browser blocked the file tab. Allow pop-ups and retry.",
+        );
       }
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
-      set_notice({
-        kind: "err",
-        text: err instanceof Error ? err.message : "Could not open the exam file.",
-      });
+      notify.error(
+        err instanceof Error ? err.message : "Could not open the exam file.",
+      );
     }
   }
 
@@ -239,12 +233,11 @@ export function DashboardLayout({
   function toggle_marker(name: string) {
     const plotted = has_marker(plot_markers, name);
     toggle_plot_marker(name);
-    set_notice({
-      kind: "ok",
-      text: plotted
+    notify.success(
+      plotted
         ? `“${name}” removed from the trend plot.`
         : `“${name}” added to the trend plot.`,
-    });
+    );
   }
 
   function show_calendar_medication(medication_id: number) {
@@ -323,6 +316,7 @@ export function DashboardLayout({
           ),
         }));
       }
+      notify.success(`“${item_name}” deleted.`);
       set_calendar_item(null);
       await refresh();
     } catch (err) {
@@ -347,10 +341,9 @@ export function DashboardLayout({
 
   function keep_pdf_only() {
     if (manual_exam) {
-      set_notice({
-        kind: "ok",
-        text: `Saved “${manual_exam.title}” as a PDF-only exam in your calendar.`,
-      });
+      notify.success(
+        `Saved “${manual_exam.title}” as a PDF-only exam in your calendar.`,
+      );
     }
     set_manual_exam(null);
   }
@@ -367,10 +360,7 @@ export function DashboardLayout({
       set_renaming_id(null);
       await refresh();
     } catch (err) {
-      set_notice({
-        kind: "err",
-        text: err instanceof Error ? err.message : "Rename failed.",
-      });
+      notify.error(err instanceof Error ? err.message : "Rename failed.");
     }
   }
 
@@ -394,11 +384,11 @@ export function DashboardLayout({
         exams: current.exams.filter((item) => item.id !== exam.id),
       }));
       await refresh();
+      notify.success(`“${exam.title}” deleted.`);
     } catch (err) {
-      set_notice({
-        kind: "err",
-        text: err instanceof Error ? err.message : "Could not delete the exam.",
-      });
+      notify.error(
+        err instanceof Error ? err.message : "Could not delete the exam.",
+      );
     }
   }
 
@@ -424,11 +414,9 @@ export function DashboardLayout({
       _set_retry_error(
         err instanceof Error ? err.message : "Could not retry extraction.",
       );
-      set_notice({
-        kind: "err",
-        text:
-          err instanceof Error ? err.message : "Could not retry extraction.",
-      });
+      notify.error(
+        err instanceof Error ? err.message : "Could not retry extraction.",
+      );
     } finally {
       set_retrying_exam_id(null);
     }
@@ -455,7 +443,6 @@ export function DashboardLayout({
       displayed,
       loading,
       load_error,
-      notice,
       search_query,
       searching,
       abnormal_count,
@@ -498,11 +485,9 @@ export function DashboardLayout({
         try {
           await api.delete_medication(medication.id);
           await refresh();
+          notify.success(`“${medication.name}” deleted.`);
         } catch (err) {
-          set_notice({
-            kind: "err",
-            text: err instanceof Error ? err.message : "Delete failed.",
-          });
+          notify.error(err instanceof Error ? err.message : "Delete failed.");
         }
       },
     },
@@ -524,7 +509,6 @@ export function DashboardLayout({
       on_retry_exam: (id) => void retry_exam(id),
       retrying_exam_id,
       retry_error,
-      notice,
     },
     medications: {
       medications,
@@ -567,12 +551,11 @@ export function DashboardLayout({
         on_close={() => set_upload_exam_open(false)}
         on_saved={(saved) => {
           set_upload_exam_open(false);
-          set_notice({
-            kind: "ok",
-            text: saved.processing
+          notify.success(
+            saved.processing
               ? `“${saved.title}” uploaded. Extraction queued.`
               : `“${saved.title}” saved without parsing.`,
-          });
+          );
           void refresh();
         }}
       />
@@ -599,10 +582,7 @@ export function DashboardLayout({
         on_keep_pdf={keep_pdf_only}
         on_saved={(saved) => {
           set_manual_exam(null);
-          set_notice({
-            kind: "ok",
-            text: `“${saved.title}” saved with manual results.`,
-          });
+          notify.success(`“${saved.title}” saved with manual results.`);
           void refresh();
         }}
       />

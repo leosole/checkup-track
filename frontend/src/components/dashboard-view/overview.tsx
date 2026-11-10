@@ -8,10 +8,6 @@ import { Card } from "../ui/badge";
 import { Button } from "../ui/button";
 import { DashboardExamList } from "./exam-list";
 import { DashboardMedicationSummary } from "./medication-summary";
-interface Notice {
-  kind: "ok" | "err";
-  text: string;
-}
 
 export interface DashboardOverviewData {
   route: DashboardRoute;
@@ -21,7 +17,6 @@ export interface DashboardOverviewData {
   displayed: Exam[];
   loading: boolean;
   load_error: string | null;
-  notice: Notice | null;
   search_query: string;
   searching: boolean;
   abnormal_count: number;
@@ -104,7 +99,6 @@ export function DashboardOverview({
     displayed,
     loading,
     load_error,
-    notice,
     search_query,
     searching,
     abnormal_count,
@@ -152,18 +146,6 @@ export function DashboardOverview({
         <Button variant="secondary" onClick={() => on_navigate("/share")}>
           Share data
         </Button>
-        {notice && (
-          <p
-            className={[
-              "rounded-lg px-3 py-1.5 text-sm",
-              notice.kind === "ok"
-                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                : "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300",
-            ].join(" ")}
-          >
-            {notice.text}
-          </p>
-        )}
         {search_query.trim() && (
           <button
             type="button"
