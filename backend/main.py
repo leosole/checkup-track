@@ -31,7 +31,7 @@ from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import FileResponse
 from starlette.types import Scope
-from sqlmodel import Session, select
+from sqlmodel import Session, delete, select
 
 import object_storage
 
@@ -561,19 +561,13 @@ def delete_exam(
             detail="Could not delete the stored PDF.",
         ) from exc
 
-    biomarkers = session.exec(
-        select(ExamBiomarker).where(ExamBiomarker.exam_id == exam_id)
-    ).all()
-    share_references = session.exec(
-        select(ShareExam).where(ShareExam.exam_id == exam_id)
-    ).all()
-    job = session.get(ExamProcessingJob, exam_id)
-    if job is not None:
-        session.delete(job)
-    for biomarker in biomarkers:
-        session.delete(biomarker)
-    for share_reference in share_references:
-        session.delete(share_reference)
+    # The models declare foreign keys but no relationships, so the unit of work
+    # has no dependency graph to order deletes with: flush it as explicit
+    # statements, children first, so the exam row is never removed while it is
+    # still referenced.
+    session.exec(delete(ExamBiomarker).where(ExamBiomarker.exam_id == exam_id))
+    session.exec(delete(ShareExam).where(ShareExam.exam_id == exam_id))
+    session.exec(delete(ExamProcessingJob).where(ExamProcessingJob.exam_id == exam_id))
     session.delete(exam)
     session.commit()
 
@@ -764,6 +758,11 @@ def delete_medication(
     med = session.get(Medication, medication_id)
     if med is None or med.user_id != user.id:
         raise HTTPException(status_code=404, detail="Medication not found.")
+    # Delete share links first, for the same reason as in delete_exam: without
+    # relationships there is no dependency graph to order the flush with.
+    session.exec(
+        delete(ShareMedication).where(ShareMedication.medication_id == medication_id)
+    )
     session.delete(med)
     session.commit()
     return {"deleted": medication_id}
