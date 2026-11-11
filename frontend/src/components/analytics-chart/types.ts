@@ -66,7 +66,8 @@ export interface ChartGeometry {
   xOf: (date: string) => number;
   yOf: (value: number) => number;
   y_ticks: number[];
-  x_ticks: string[];
+  /** One label per exam date that fits without touching the previous one. */
+  date_ticks: { date: string; x: number; label: string }[];
   year_ticks: { year: number; x: number }[];
   paths: ChartPath[];
   has_data: boolean;

@@ -9,12 +9,11 @@ import {
   startOfMonth,
   toIso,
 } from "../../date-utils";
-import { Badge, Card } from "../ui/badge";
+import { Card } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
   DEFAULT_EXAM_COLOR,
   barsForWeek,
-  medicationColor,
   medRowBounds,
 } from "./bars";
 import type { CalendarGridProps } from "./types";

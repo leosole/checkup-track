@@ -7,7 +7,7 @@ export interface AccountCapabilities {
   manage_providers: boolean;
   create_shares: boolean;
   revoke_shares: boolean;
-  retryExtraction: boolean;
+  retry_extraction: boolean;
 }
 
 export interface User {

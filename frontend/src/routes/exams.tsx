@@ -122,11 +122,12 @@ function ExamsPage() {
                 </p>
               </div>
             </div>
-            {user?.capabilities.create_records && (
-              <Button onClick={() => dash.set_upload_exam_open(true)}>
-                Add exam
-              </Button>
-            )}
+            <Button
+              disabled={!user?.capabilities.create_records}
+              onClick={() => dash.set_upload_exam_open(true)}
+            >
+              Add exam
+            </Button>
           </div>
 
           <ExamFilters
@@ -174,7 +175,7 @@ function ExamsPage() {
             <ExamTable
               exams={visible_exams}
               can_delete={Boolean(user?.capabilities.delete_records)}
-              can_retry={Boolean(user?.capabilities.retryExtraction)}
+              can_retry={Boolean(user?.capabilities.retry_extraction)}
               retrying_exam_id={dash.retrying_exam_id}
               retry_error={dash.retry_error}
               deleting_id={deleting_id}

@@ -80,15 +80,14 @@ export function MedicationTable({
                       <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
                     </svg>
                   </button>
-                  {can_delete && (
-                    <button
-                      type="button"
-                      aria-label={`Delete ${medication.name}`}
-                      title="Delete medication"
-                      disabled={deleting_id === medication.id}
-                      onClick={() => on_deleted_medication(medication.id)}
-                      className="rounded-lg p-2 text-gray-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-                    >
+                  <button
+                    type="button"
+                    aria-label={`Delete ${medication.name}`}
+                    title="Delete medication"
+                    disabled={!can_delete || deleting_id === medication.id}
+                    onClick={() => on_deleted_medication(medication.id)}
+                    className="rounded-lg p-2 text-gray-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                  >
                       <svg
                         className="h-4 w-4"
                         viewBox="0 0 20 20"
@@ -101,8 +100,7 @@ export function MedicationTable({
                           clipRule="evenodd"
                         />
                       </svg>
-                    </button>
-                  )}
+                  </button>
                 </div>
               </td>
             </tr>

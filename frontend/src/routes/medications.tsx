@@ -127,11 +127,12 @@ function MedicationsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {user?.capabilities.create_records && (
-                <Button onClick={() => openMedication(null)}>
-                  Add medication
-                </Button>
-              )}
+              <Button
+                disabled={!user?.capabilities.create_records}
+                onClick={() => openMedication(null)}
+              >
+                Add medication
+              </Button>
             </div>
           </div>
 

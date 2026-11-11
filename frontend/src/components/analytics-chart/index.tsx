@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api-client";
+import { formatDate } from "../../date-utils";
 import type { TimeSeries } from "../../types";
 import { Badge, Card, EmptyState, Spinner } from "../ui/badge";
 import { AnalyticsChartControls } from "./controls";
@@ -206,7 +207,13 @@ export function AnalyticsChart({
   const [loading, set_loading] = useState(false);
   const [error, set_error] = useState<string | null>(null);
   const [width, set_width] = useState(720);
-  const exam_dates = exams.map((exam) => exam.date_performed).sort();
+  const exam_dates = useMemo(
+    () =>
+      Array.from(new Set(exams.map((exam) => exam.date_performed)))
+        .filter(Boolean)
+        .sort(),
+    [exams],
+  );
   const start_date = exam_dates[0] ?? "";
   const end_date = exam_dates[exam_dates.length - 1] ?? "";
   const date_bounds_ref = useRef({ start_date, end_date });
@@ -345,13 +352,18 @@ export function AnalyticsChart({
       CHART_PAD.top + inner_h - ((v - lo) / (hi - lo)) * inner_h;
 
     const y_ticks = niceTicks(lo, hi, 5);
-    const x_tick_count = Math.min(6, Math.max(2, Math.floor(inner_w / 110)));
-    const x_ticks: string[] = [];
-    if (dates.length > 0) {
-      for (let i = 0; i < x_tick_count; i++) {
-        const t = domain_start + (domain_span * i) / (x_tick_count - 1 || 1);
-        x_ticks.push(new Date(t).toISOString().slice(0, 10));
-      }
+    // Only dates that carry a plotted value are labelled, so a marker never sits
+    // where the lines have no point. A later exam is dropped when its label
+    // would collide with the previous one, leaving the earlier date visible.
+    const date_ticks: { date: string; x: number; label: string }[] = [];
+    let last_label_right = -Infinity;
+    for (const date of new Set(dates)) {
+      const x = xOf(date);
+      const label = formatDate(date).replace(/, \d{4}$/, "");
+      const half_width = (label.length * 6 + 10) / 2;
+      if (x - half_width < last_label_right + 10) continue;
+      date_ticks.push({ date, x, label });
+      last_label_right = x + half_width;
     }
     const year_ticks = dates.length
       ? Array.from({ length: last_year - first_year + 1 }, (_, index) => {
@@ -385,7 +397,7 @@ export function AnalyticsChart({
       xOf,
       yOf,
       y_ticks,
-      x_ticks,
+      date_ticks,
       year_ticks,
       paths,
       has_data: all_points.length > 0,

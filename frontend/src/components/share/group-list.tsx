@@ -102,17 +102,16 @@ export function GroupList({
                     <span className="text-gray-400 dark:text-gray-500">
                       expires {formatTimestamp(code.expires_at)}
                     </span>
-                    {can_revoke &&
-                      (code.status === "active" || code.status === "used") && (
-                        <button
-                          type="button"
-                          onClick={() => on_revoke(code.id)}
-                          disabled={revoking_id === code.id}
-                          className="ml-auto font-semibold text-rose-600 transition hover:text-rose-700 disabled:opacity-60 dark:text-rose-400 dark:hover:text-rose-300"
-                        >
-                          {revoking_id === code.id ? "Revoking…" : "Revoke"}
-                        </button>
-                      )}
+                    {(code.status === "active" || code.status === "used") && (
+                      <button
+                        type="button"
+                        onClick={() => on_revoke(code.id)}
+                        disabled={!can_revoke || revoking_id === code.id}
+                        className="ml-auto font-semibold text-rose-600 transition hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-rose-400 dark:hover:text-rose-300"
+                      >
+                        {revoking_id === code.id ? "Revoking…" : "Revoke"}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

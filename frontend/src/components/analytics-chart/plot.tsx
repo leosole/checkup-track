@@ -137,16 +137,16 @@ export function AnalyticsChartPlot({
           </g>
         ))}
 
-        {geometry.x_ticks.map((tick) => (
+        {geometry.date_ticks.map((tick) => (
           <text
-            key={`x-${tick}`}
-            x={geometry.xOf(tick)}
+            key={`x-${tick.date}`}
+            x={tick.x}
             y={CHART_HEIGHT - CHART_PAD.bottom + 20}
             textAnchor="middle"
             fontSize={11}
             className="fill-gray-500 dark:fill-gray-400"
           >
-            {formatDate(tick).replace(/, \d{4}$/, "")}
+            {tick.label}
           </text>
         ))}
 

@@ -365,7 +365,7 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
   }
 
   async function retryExam(id: number) {
-    if (!user?.capabilities.retryExtraction) return;
+    if (!user?.capabilities.retry_extraction) return;
     set_retrying_exam_id(id);
     _set_retry_error(null);
     try {

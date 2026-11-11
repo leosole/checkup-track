@@ -63,29 +63,25 @@ export function CalendarItemModal({
                 Download file
               </Button>
             )}
-            {is_exam &&
-              user?.capabilities.retryExtraction &&
-              item.exam.processing?.retry_allowed && (
+            {is_exam && item.exam.processing?.retry_allowed && (
               <Button
                 variant="secondary"
                 size="sm"
                 loading={retrying_exam_id === item.exam.id}
                 onClick={() => on_retry_exam(item.exam.id)}
-                disabled={busy}
+                disabled={busy || !user?.capabilities.retry_extraction}
               >
                 Retry extraction
               </Button>
             )}
-            {user?.capabilities.delete_records && (
-              <Button
-                variant="danger"
-                size="sm"
-                disabled={busy}
-                onClick={on_delete}
-              >
-                Delete
-              </Button>
-            )}
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={busy || !user?.capabilities.delete_records}
+              onClick={on_delete}
+            >
+              Delete
+            </Button>
           </div>
         )
       }

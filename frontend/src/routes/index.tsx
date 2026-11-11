@@ -28,22 +28,22 @@ function DashboardPage() {
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-center gap-3">
-        {user?.capabilities.create_records && (
-          <>
-            <Button onClick={() => dash.set_upload_exam_open(true)}>
-              Upload exam
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                dash.set_editing_med(null);
-                dash.set_modal_open(true);
-              }}
-            >
-              Add medication
-            </Button>
-          </>
-        )}
+        <Button
+          disabled={!user?.capabilities.create_records}
+          onClick={() => dash.set_upload_exam_open(true)}
+        >
+          Upload exam
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={!user?.capabilities.create_records}
+          onClick={() => {
+            dash.set_editing_med(null);
+            dash.set_modal_open(true);
+          }}
+        >
+          Add medication
+        </Button>
         <Button variant="secondary" onClick={() => void navigate({ to: "/share" })}>
           Share data
         </Button>
