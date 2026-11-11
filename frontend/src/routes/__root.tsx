@@ -1,11 +1,54 @@
-import { createRootRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { use_auth } from "../auth-context";
-import { SignInView } from "../components/sign-in-view";
+import {
+  createRootRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
+import { useAuth } from "../auth-context";
+import { SignIn } from "../components/sign-in";
 import { Spinner } from "../components/ui/badge";
+import { DashboardHeader } from "../components/dashboard/header";
+import { DashboardDialogs } from "../components/dashboard/dialogs";
+import {
+  DashboardProvider,
+  useDashboardState,
+} from "../components/dashboard/provider";
+
+/** Signed-in chrome: header, the active page, and the shared dialogs. */
+function DashboardFrame() {
+  const { user, signOut } = useAuth();
+  const dash = useDashboardState();
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <DashboardHeader
+        user={user}
+        route={dash.route}
+        search_query={dash.search_query}
+        searching={dash.searching}
+        theme={dash.theme}
+        on_search_query_change={dash.set_search_query}
+        on_navigate={(next_route) => void navigate({ to: next_route })}
+        on_toggle_theme={dash.toggleTheme}
+        on_sign_out={signOut}
+      />
+
+      <Outlet />
+
+      <DashboardDialogs
+        dash={dash}
+        can_create_records={Boolean(user?.capabilities.create_records)}
+        can_edit_results={Boolean(user?.capabilities.edit_results)}
+      />
+    </div>
+  );
+}
 
 function Root() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const { user, loading } = use_auth();
+  const { user, loading } = useAuth();
 
   // Legal pages and the guest share screen are reachable without an account.
   if (
@@ -24,7 +67,13 @@ function Root() {
     );
   }
 
-  return user ? <Outlet /> : <SignInView />;
+  if (!user) return <SignIn />;
+
+  return (
+    <DashboardProvider>
+      <DashboardFrame />
+    </DashboardProvider>
+  );
 }
 
 function NotFound() {

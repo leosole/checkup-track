@@ -116,6 +116,34 @@ network-heavy steps to CI.
   reintroduce askpass/token-wrapper scripts or read `.env.local` for a
   credential.
 
+## Frontend file structure
+
+These rules apply to every file under `frontend/src/`:
+
+- **Route files own the route.** A file in `routes/` contains the route
+  definition and the page's structural shell (layout container, loading branch,
+  which view renders). It must not be a bare passthrough that only returns
+  another component.
+- **Types live in their own files.** No `interface`/`type` declarations inline in
+  a component file. Split components put them in the folder's `types.ts`, UI
+  primitives use `components/ui/types.ts`, single-file components share
+  `components/types.ts`, and anything describing API payloads goes in
+  `src/types/`.
+- **Split files that do too much.** When one file mixes data loading, handlers
+  and several rendered sections, break it into chunks.
+- **Chunks live in a folder named after the component**, with `index.tsx` as the
+  entry point (`components/analytics-chart/index.tsx`).
+- **Do not repeat the component name in chunk filenames.** Use
+  `calendar-grid/bars.ts`, `share-view/group-list.tsx`,
+  `share-view/created-code.tsx` — not `calendar-grid/calendar-grid-bars.ts`.
+- A component that is a single self-contained file stays flat as
+  `components/name.tsx`; only split components get a folder.
+- Pure helpers, formatting and constants go in a named module (`format.ts`,
+  `bars.ts`, `share-utils.ts`) rather than being buried inside JSX.
+- **Functions and hooks are camelCase** — `formatDate`, `useRouteContent`,
+  `api.listExams()` — never `snake_case`. Wire-format fields from the API keep
+  the names the backend sends.
+
 ## Environment
 
 | Key | Needed for | Missing behavior |

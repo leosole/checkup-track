@@ -2,7 +2,7 @@
  * Light/dark theme handling (Tailwind `class` strategy).
  *
  * The choice is persisted in localStorage; with nothing stored it follows the
- * OS preference. `init_theme()` runs before the first render so the page never
+ * OS preference. `initTheme()` runs before the first render so the page never
  * flashes the wrong palette.
  */
 
@@ -10,7 +10,7 @@ export type Theme = "light" | "dark";
 
 const THEME_KEY = "checkup.theme";
 
-function prefers_dark(): boolean {
+function prefersDark(): boolean {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
@@ -18,17 +18,17 @@ function prefers_dark(): boolean {
   );
 }
 
-export function get_theme(): Theme {
+export function getTheme(): Theme {
   try {
     const stored = localStorage.getItem(THEME_KEY);
     if (stored === "dark" || stored === "light") return stored;
   } catch {
     // Private mode / storage disabled: fall back to the OS preference.
   }
-  return prefers_dark() ? "dark" : "light";
+  return prefersDark() ? "dark" : "light";
 }
 
-export function apply_theme(theme: Theme): void {
+export function applyTheme(theme: Theme): void {
   document.documentElement.classList.toggle("dark", theme === "dark");
   try {
     localStorage.setItem(THEME_KEY, theme);
@@ -37,8 +37,8 @@ export function apply_theme(theme: Theme): void {
   }
 }
 
-export function init_theme(): Theme {
-  const theme = get_theme();
+export function initTheme(): Theme {
+  const theme = getTheme();
   document.documentElement.classList.toggle("dark", theme === "dark");
   return theme;
 }

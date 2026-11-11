@@ -1,7 +1,11 @@
-import type { HTMLAttributes, ReactNode } from "react";
 import { PiPillFill } from "react-icons/pi";
-
-type BadgeTone = "gray" | "brand" | "success" | "warning" | "danger" | "info";
+import type {
+  BadgeProps,
+  BadgeTone,
+  CardProps,
+  EmptyStateProps,
+  SpinnerProps,
+} from "./types";
 
 const TONES: Record<BadgeTone, string> = {
   gray: "bg-gray-100 text-gray-700 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700",
@@ -15,11 +19,6 @@ const TONES: Record<BadgeTone, string> = {
     "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30",
   info: "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/30",
 };
-
-interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
-  tone?: BadgeTone;
-  children: ReactNode;
-}
 
 export function Badge({
   tone = "gray",
@@ -37,10 +36,6 @@ export function Badge({
   );
 }
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  children: ReactNode;
-}
-
 export function Card({ className = "", children, ...rest }: CardProps) {
   return (
     <div
@@ -52,9 +47,7 @@ export function Card({ className = "", children, ...rest }: CardProps) {
   );
 }
 
-export function Spinner({
-  className = "h-5 w-5",
-}: { className?: string } = {}) {
+export function Spinner({ className = "h-5 w-5" }: SpinnerProps = {}) {
   return (
     <PiPillFill
       className={`animate-spin text-brand-600 dark:text-brand-400 ${className}`}
@@ -64,15 +57,7 @@ export function Spinner({
   );
 }
 
-export function EmptyState({
-  title,
-  hint,
-  icon,
-}: {
-  title: string;
-  hint?: string;
-  icon?: ReactNode;
-}) {
+export function EmptyState({ title, hint, icon }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50/60 px-6 py-10 text-center dark:border-gray-700 dark:bg-gray-900/40">
       {icon && (

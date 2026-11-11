@@ -1,14 +1,8 @@
-import type { IconType } from "react-icons";
 import { FiAlertCircle, FiBell, FiCheckCircle, FiInfo, FiX } from "react-icons/fi";
 import { toast as sonner_toast } from "sonner";
+import type { ToastCardProps, ToastKind, ToastStyle } from "./types";
 
-export type ToastKind = "success" | "error" | "info" | "default";
-
-interface ToastStyle {
-  Icon: IconType;
-  wrapper: string;
-  icon_class: string;
-}
+export type { ToastKind } from "./types";
 
 // Project palette: success uses the brand purple, error rose, info amber,
 // plain messages the neutral gray scale.
@@ -39,15 +33,7 @@ const TOAST_STYLES: Record<ToastKind, ToastStyle> = {
   },
 };
 
-function ToastCard({
-  kind,
-  message,
-  on_close,
-}: {
-  kind: ToastKind;
-  message: string;
-  on_close: () => void;
-}) {
+function ToastCard({ kind, message, on_close }: ToastCardProps) {
   const { Icon, wrapper, icon_class } = TOAST_STYLES[kind];
   return (
     <div

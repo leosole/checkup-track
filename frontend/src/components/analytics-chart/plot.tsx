@@ -1,6 +1,9 @@
 import { useId, useRef, useState, type MouseEvent } from "react";
-import type { TimeSeriesPoint } from "../../api-client";
-import { format_date } from "../../date-utils";
+import { formatDate } from "../../date-utils";
+import type { AnalyticsChartPlotProps, Tooltip } from "./types";
+
+export type { ChartGeometry } from "./types";
+
 
 export const SERIES_COLORS = [
   "#7c3aed",
@@ -16,54 +19,20 @@ export const SERIES_COLORS = [
 export const CHART_PAD = { top: 24, right: 24, bottom: 44, left: 64 };
 export const CHART_HEIGHT = 380;
 
-interface ChartPath {
-  spec: string;
-  unit: string;
-  color: string;
-  d: string;
-  points: TimeSeriesPoint[];
-}
 
-export interface ChartGeometry {
-  inner_w: number;
-  inner_h: number;
-  x_of: (date: string) => number;
-  y_of: (value: number) => number;
-  y_ticks: number[];
-  x_ticks: string[];
-  year_ticks: { year: number; x: number }[];
-  paths: ChartPath[];
-  has_data: boolean;
-}
-
-interface Tooltip {
-  x: number;
-  y: number;
-  series: string;
-  unit: string;
-  value: number;
-  date: string;
-  exam_title: string;
-  is_abnormal: boolean;
-  color: string;
-}
-
-export function chart_color(index: number) {
+export function chartColor(index: number) {
   return SERIES_COLORS[index % SERIES_COLORS.length];
 }
 
 export function AnalyticsChartPlot({
   width,
   geometry,
-}: {
-  width: number;
-  geometry: ChartGeometry;
-}) {
+}: AnalyticsChartPlotProps) {
   const react_id = useId();
   const svg_ref = useRef<SVGSVGElement | null>(null);
   const [tooltip, set_tooltip] = useState<Tooltip | null>(null);
 
-  function on_pointer_move(event: MouseEvent<SVGSVGElement>) {
+  function onPointerMove(event: MouseEvent<SVGSVGElement>) {
     const svg = svg_ref.current;
     if (!svg || geometry.paths.length === 0) return;
     const rect = svg.getBoundingClientRect();
@@ -74,8 +43,8 @@ export function AnalyticsChartPlot({
     geometry.paths.forEach((path) => {
       const color = path.color;
       for (const point of path.points) {
-        const x = geometry.x_of(point.date);
-        const y = geometry.y_of(point.value);
+        const x = geometry.xOf(point.date);
+        const y = geometry.yOf(point.value);
         const dist = Math.hypot(x - mouse_x, y - mouse_y);
         if (dist < 28 && (!best || dist < best.dist)) {
           best = {
@@ -106,7 +75,7 @@ export function AnalyticsChartPlot({
         className="select-none"
         role="img"
         aria-label="Multi-series biomarker line chart"
-        onMouseMove={on_pointer_move}
+        onMouseMove={onPointerMove}
         onMouseLeave={() => set_tooltip(null)}
       >
         <defs>
@@ -125,14 +94,14 @@ export function AnalyticsChartPlot({
             <line
               x1={CHART_PAD.left}
               x2={width - CHART_PAD.right}
-              y1={geometry.y_of(tick)}
-              y2={geometry.y_of(tick)}
+              y1={geometry.yOf(tick)}
+              y2={geometry.yOf(tick)}
               className="stroke-gray-200 dark:stroke-gray-700"
               strokeWidth={1}
             />
             <text
               x={CHART_PAD.left - 10}
-              y={geometry.y_of(tick)}
+              y={geometry.yOf(tick)}
               textAnchor="end"
               dominantBaseline="middle"
               fontSize={11}
@@ -170,13 +139,13 @@ export function AnalyticsChartPlot({
         {geometry.x_ticks.map((tick) => (
           <text
             key={`x-${tick}`}
-            x={geometry.x_of(tick)}
+            x={geometry.xOf(tick)}
             y={CHART_HEIGHT - CHART_PAD.bottom + 20}
             textAnchor="middle"
             fontSize={11}
             className="fill-gray-500 dark:fill-gray-400"
           >
-            {format_date(tick).replace(/, \d{4}$/, "")}
+            {formatDate(tick).replace(/, \d{4}$/, "")}
           </text>
         ))}
 
@@ -213,15 +182,15 @@ export function AnalyticsChartPlot({
                 {path.points.map((point) => (
                   <g key={`${path.spec}-${point.date}-${point.value}`}>
                     <circle
-                      cx={geometry.x_of(point.date)}
-                      cy={geometry.y_of(point.value)}
+                      cx={geometry.xOf(point.date)}
+                      cy={geometry.yOf(point.value)}
                       r={point.is_abnormal ? 4.5 : 3}
                       fill={point.is_abnormal ? "#fff" : color}
                       stroke={point.is_abnormal ? "#e11d48" : color}
                       strokeWidth={point.is_abnormal ? 2.5 : 1}
                     >
                       <title>
-                        {`${path.spec}: ${point.value} ${path.unit} on ${format_date(point.date)}${
+                        {`${path.spec}: ${point.value} ${path.unit} on ${formatDate(point.date)}${
                           point.is_abnormal ? " (abnormal)" : ""
                         } — ${point.exam_title}`}
                       </title>
@@ -261,7 +230,7 @@ export function AnalyticsChartPlot({
             {tooltip.value}{" "}
             <span className="font-medium text-gray-300">{tooltip.unit}</span>
           </p>
-          <p className="mt-1 text-gray-300">{format_date(tooltip.date)}</p>
+          <p className="mt-1 text-gray-300">{formatDate(tooltip.date)}</p>
           <p className="truncate text-gray-400">{tooltip.exam_title}</p>
         </div>
       )}

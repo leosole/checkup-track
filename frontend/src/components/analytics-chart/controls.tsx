@@ -1,27 +1,11 @@
-import { marker_key } from "./marker-selection";
-
-interface AnalyticsChartControlsProps {
-  specs: string[];
-  filtered_specs: string[];
-  selected: string[];
-  unit_of_spec: (spec: string) => string;
-  merge_selection: string[];
-  merge_member_count: number;
-  merge_disabled_reason: string | null;
-  spec_filter: string;
-  on_spec_filter_change: (value: string) => void;
-  on_clear_filter: () => void;
-  on_toggle_spec: (spec: string) => void;
-  on_toggle_merge_selection: (spec: string) => void;
-  on_merge_selected: () => void;
-  color_of: (index: number) => string;
-}
+import { markerKey } from "./marker-selection";
+import type { AnalyticsChartControlsProps } from "./types";
 
 export function AnalyticsChartControls({
   specs,
   filtered_specs,
   selected,
-  unit_of_spec,
+  unitOfSpec,
   merge_selection,
   merge_member_count,
   merge_disabled_reason,
@@ -47,7 +31,7 @@ export function AnalyticsChartControls({
             aria-label="Selected trend markers"
           >
             {selected.map((spec, index) => {
-              const unit = unit_of_spec(spec);
+              const unit = unitOfSpec(spec);
               return (
                 <div
                   key={spec}
@@ -57,7 +41,7 @@ export function AnalyticsChartControls({
                   <input
                     type="checkbox"
                     checked={merge_selection.some(
-                      (name) => marker_key(name) === marker_key(spec),
+                      (name) => markerKey(name) === markerKey(spec),
                     )}
                     onChange={() => on_toggle_merge_selection(spec)}
                     aria-label={`Select ${spec} to merge`}

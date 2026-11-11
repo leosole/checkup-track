@@ -1,15 +1,6 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonProps, ButtonSize, ButtonVariant } from "./types";
 
-type Variant = "primary" | "secondary" | "danger" | "ghost";
-type Size = "sm" | "md";
-
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: Variant;
-  size?: Size;
-  loading?: boolean;
-}
-
-const VARIANTS: Record<Variant, string> = {
+const VARIANTS: Record<ButtonVariant, string> = {
   primary:
     "bg-brand-600 text-white shadow-sm hover:bg-brand-700 focus-visible:outline-brand-600",
   secondary:
@@ -22,7 +13,7 @@ const VARIANTS: Record<Variant, string> = {
     "dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white",
 };
 
-const SIZES: Record<Size, string> = {
+const SIZES: Record<ButtonSize, string> = {
   sm: "px-2.5 py-1.5 text-xs",
   md: "px-4 py-2.5 text-sm",
 };

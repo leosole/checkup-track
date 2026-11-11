@@ -1,9 +1,5 @@
-import type { InputHTMLAttributes, ReactNode } from "react";
-
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-  error?: string | null;
-}
+import type { ReactNode } from "react";
+import type { InputProps } from "./types";
 
 const BASE =
   "block w-full rounded-lg border-0 px-3.5 py-2.5 text-sm text-gray-900 " +
