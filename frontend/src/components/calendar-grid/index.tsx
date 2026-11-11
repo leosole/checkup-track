@@ -11,7 +11,7 @@ import {
 } from "../../date-utils";
 import { Badge, Card } from "../ui/badge";
 import { Button } from "../ui/button";
-import { MED_COLORS, barsForWeek } from "./bars";
+import { MED_COLORS, barsForWeek, medRowBounds } from "./bars";
 import type { CalendarGridProps } from "./types";
 
 export function CalendarGrid({
@@ -28,6 +28,11 @@ export function CalendarGrid({
     }
     return rows;
   }, [days]);
+
+  const med_bounds = useMemo(
+    () => medRowBounds(data.medications, weeks),
+    [data.medications, weeks],
+  );
 
   const exams_by_day = useMemo(() => {
     const map = new Map<string, CalendarData["exams"]>();
@@ -109,7 +114,12 @@ export function CalendarGrid({
 
         <div className="overflow-hidden rounded-lg ring-1 ring-gray-200 dark:ring-gray-800">
           {weeks.map((week, week_index) => {
-            const lanes = barsForWeek(data.medications, week);
+            const lanes = barsForWeek(
+              data.medications,
+              week,
+              week_index,
+              med_bounds,
+            );
             const lane_height = 20;
             return (
               <div
@@ -145,7 +155,7 @@ export function CalendarGrid({
                       </span>
                       {exams.length > 0 && (
                         <div className="mt-1 space-y-0.5">
-                          {exams.slice(0, 2).map((exam) => (
+                          {exams.map((exam) => (
                             <button
                               key={exam.id}
                               type="button"
@@ -157,11 +167,6 @@ export function CalendarGrid({
                               <span className="truncate">{exam.title}</span>
                             </button>
                           ))}
-                          {exams.length > 2 && (
-                            <span className="pl-2.5 text-[10px] text-gray-400 dark:text-gray-500">
-                              +{exams.length - 2} more
-                            </span>
-                          )}
                         </div>
                       )}
                     </div>
@@ -182,16 +187,26 @@ export function CalendarGrid({
                           onClick={() =>
                             onClick({ kind: "medication", id: bar.medication_id })
                           }
-                          title={`${bar.label} — active across this week`}
+                          title={bar.title}
                           aria-label={`${bar.label}, medication details`}
-                          className={`absolute flex h-4 items-center rounded-full px-2 text-[10px] font-semibold text-white shadow-sm ${bar.color}`}
+                          className={`absolute flex h-4 items-center gap-1 overflow-hidden rounded-full px-1.5 text-[10px] font-semibold text-white shadow-sm ${bar.color}`}
                           style={{
                             top: lane_index * lane_height + 4,
                             left: `calc(${(bar.start_col / 7) * 100}% + 3px)`,
                             width: `calc(${(bar.span / 7) * 100}% - 6px)`,
                           }}
                         >
-                          <span className="truncate">{bar.label}</span>
+                          {bar.starts_before_label && (
+                            <span className="shrink-0 tabular-nums">
+                              ‹ {bar.starts_before_label}
+                            </span>
+                          )}
+                          <span className="min-w-0 truncate">{bar.label}</span>
+                          {bar.ends_after_label && (
+                            <span className="ml-auto shrink-0 tabular-nums">
+                              {bar.ends_after_label} ›
+                            </span>
+                          )}
                         </button>
                       )),
                     )}
