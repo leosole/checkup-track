@@ -369,6 +369,8 @@ def _exam_to_response(
         date_performed=exam.date_performed,
         pdf_path=exam.pdf_path,
         markdown_path=exam.markdown_path,
+        laboratory=exam.laboratory,
+        color=exam.color,
         biomarkers=[
             BiomarkerResponse(
                 id=b.id,
@@ -486,17 +488,23 @@ def update_exam(
     user: User = Depends(require_capability("edit_exam_metadata")),
     session: Session = Depends(get_session),
 ) -> ExamResponse:
-    """Update an exam's name and/or the date it was performed.
+    """Update an exam's name, date, laboratory, and/or calendar color.
 
-    Both fields are optional; omitted fields keep their current value.
+    Every field is optional; omitted fields keep their current value. Sending
+    ``laboratory: null`` or ``color: null`` clears it.
     """
     exam = session.get(Exam, exam_id)
     if exam is None or exam.user_id != user.id:
         raise HTTPException(status_code=404, detail="Exam not found.")
+    provided = payload.model_fields_set
     if payload.title is not None:
         exam.title = payload.title
     if payload.date_performed is not None:
         exam.date_performed = payload.date_performed
+    if "laboratory" in provided:
+        exam.laboratory = payload.laboratory
+    if "color" in provided:
+        exam.color = payload.color
     session.add(exam)
     session.commit()
     session.refresh(exam)
@@ -666,6 +674,7 @@ def create_medication(
         frequency_per_day=payload.frequency_per_day,
         start_date=payload.start_date,
         end_date=payload.end_date,
+        color=payload.color,
     )
     session.add(med)
     session.commit()
@@ -677,6 +686,7 @@ def create_medication(
         frequency_per_day=med.frequency_per_day,
         start_date=med.start_date,
         end_date=med.end_date,
+        color=med.color,
     )
 
 
@@ -698,6 +708,7 @@ def list_medications(
             frequency_per_day=m.frequency_per_day,
             start_date=m.start_date,
             end_date=m.end_date,
+            color=m.color,
         )
         for m in meds
     ]
@@ -730,6 +741,8 @@ def update_medication(
         med.start_date = payload.start_date
     if "end_date" in provided:
         med.end_date = payload.end_date
+    if "color" in provided:
+        med.color = payload.color
     if med.end_date is not None and med.end_date < med.start_date:
         raise HTTPException(
             status_code=422,
@@ -746,6 +759,7 @@ def update_medication(
         frequency_per_day=med.frequency_per_day,
         start_date=med.start_date,
         end_date=med.end_date,
+        color=med.color,
     )
 
 
@@ -786,7 +800,12 @@ def calendar(
     ).all()
     return CalendarResponse(
         exams=[
-            CalendarExam(id=e.id, title=e.title, date=e.date_performed)
+            CalendarExam(
+                id=e.id,
+                title=e.title,
+                date=e.date_performed,
+                color=e.color,
+            )
             for e in exams
         ],
         medications=[
@@ -795,6 +814,7 @@ def calendar(
                 name=m.name,
                 start_date=m.start_date,
                 end_date=m.end_date,
+                color=m.color,
             )
             for m in meds
         ],
@@ -842,6 +862,7 @@ def _build_time_series(
                         value=biomarker.value,
                         is_abnormal=biomarker.is_abnormal,
                         exam_title=exam.title,
+                        reference_range=biomarker.reference_range,
                     )
                 )
         points.sort(key=lambda p: p.date)
@@ -1291,6 +1312,7 @@ def guest_shared_data(
                 frequency_per_day=medication.frequency_per_day,
                 start_date=medication.start_date,
                 end_date=medication.end_date,
+                color=medication.color,
             )
             for medication in medications
         ],

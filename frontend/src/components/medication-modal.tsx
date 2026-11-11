@@ -18,6 +18,7 @@ export function MedicationModal({
   const [frequency, set_frequency] = useState("1");
   const [start_date, set_start_date] = useState(todayIso());
   const [end_date, set_end_date] = useState("");
+  const [color, set_color] = useState<string | null>(null);
   const [saving, set_saving] = useState(false);
   const [error, set_error] = useState<string | null>(null);
 
@@ -31,6 +32,7 @@ export function MedicationModal({
     set_frequency(String(med?.frequency_per_day ?? 1));
     set_start_date(med?.start_date ?? todayIso());
     set_end_date(med?.end_date ?? "");
+    set_color(med?.color ?? null);
     set_error(null);
   }, [open, med]);
 
@@ -54,6 +56,7 @@ export function MedicationModal({
         frequency_per_day: freq,
         start_date,
         end_date: end_date || null,
+        color,
       };
       if (med) {
         await api.updateMedication(med.id, input);
@@ -139,6 +142,36 @@ export function MedicationModal({
         <p className="text-xs text-gray-500 dark:text-gray-400">
           Leave the end date empty for a permanent regimen.
         </p>
+        <div>
+          <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Calendar color
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="size-7 overflow-hidden rounded-lg border-none">
+              <input
+                type="color"
+                aria-label="Medication calendar color"
+                value={color ?? "#8b5cf6"}
+                onChange={(event) => set_color(event.target.value)}
+                className="size-9 cursor-pointer border-none -ml-1 -mt-1"
+              />
+            </span>
+            {color ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => set_color(null)}
+              >
+                Use default
+              </Button>
+            ) : (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Default color
+              </span>
+            )}
+          </div>
+        </div>
       </form>
     </Modal>
   );

@@ -11,7 +11,12 @@ import {
 } from "../../date-utils";
 import { Badge, Card } from "../ui/badge";
 import { Button } from "../ui/button";
-import { MED_COLORS, barsForWeek, medRowBounds } from "./bars";
+import {
+  DEFAULT_EXAM_COLOR,
+  barsForWeek,
+  medicationColor,
+  medRowBounds,
+} from "./bars";
 import type { CalendarGridProps } from "./types";
 
 export function CalendarGrid({
@@ -19,6 +24,11 @@ export function CalendarGrid({
   onClick,
 }: CalendarGridProps) {
   const [cursor, set_cursor] = useState(() => startOfMonth(new Date()));
+  const [show_exams, set_show_exams] = useState(true);
+  const [show_medications, set_show_medications] = useState(true);
+
+  const exams_data = show_exams ? data.exams : [];
+  const medications_data = show_medications ? data.medications : [];
 
   const days = useMemo(() => monthGrid(cursor), [cursor]);
   const weeks = useMemo(() => {
@@ -30,19 +40,19 @@ export function CalendarGrid({
   }, [days]);
 
   const med_bounds = useMemo(
-    () => medRowBounds(data.medications, weeks),
-    [data.medications, weeks],
+    () => medRowBounds(medications_data, weeks),
+    [medications_data, weeks],
   );
 
   const exams_by_day = useMemo(() => {
     const map = new Map<string, CalendarData["exams"]>();
-    for (const exam of data.exams) {
+    for (const exam of exams_data) {
       const list = map.get(exam.date) ?? [];
       list.push(exam);
       map.set(exam.date, list);
     }
     return map;
-  }, [data.exams]);
+  }, [exams_data]);
 
   const today = new Date();
 
@@ -57,7 +67,25 @@ export function CalendarGrid({
             Exam days and active medication windows in one timeline
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={show_exams}
+              onChange={(event) => set_show_exams(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
+            />
+            Exams
+          </label>
+          <label className="mr-2 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={show_medications}
+              onChange={(event) => set_show_medications(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
+            />
+            Medications
+          </label>
           <button
             type="button"
             aria-label="Previous month"
@@ -115,7 +143,7 @@ export function CalendarGrid({
         <div className="overflow-hidden rounded-lg ring-1 ring-gray-200 dark:ring-gray-800">
           {weeks.map((week, week_index) => {
             const lanes = barsForWeek(
-              data.medications,
+              medications_data,
               week,
               week_index,
               med_bounds,
@@ -163,7 +191,13 @@ export function CalendarGrid({
                               title={`View details — ${exam.title}`}
                               className="flex w-full items-center gap-1 truncate text-left text-[10px] font-medium text-brand-700 hover:underline dark:text-brand-300"
                             >
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500 dark:bg-brand-400" />
+                              <span
+                                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                                style={{
+                                  backgroundColor:
+                                    exam.color ?? DEFAULT_EXAM_COLOR,
+                                }}
+                              />
                               <span className="truncate">{exam.title}</span>
                             </button>
                           ))}
@@ -189,8 +223,9 @@ export function CalendarGrid({
                           }
                           title={bar.title}
                           aria-label={`${bar.label}, medication details`}
-                          className={`absolute flex h-4 items-center gap-1 overflow-hidden rounded-full px-1.5 text-[10px] font-semibold text-white shadow-sm ${bar.color}`}
+                          className="absolute flex h-4 items-center gap-1 overflow-hidden rounded-full px-1.5 text-[10px] font-semibold text-white shadow-sm"
                           style={{
+                            backgroundColor: bar.color,
                             top: lane_index * lane_height + 4,
                             left: `calc(${(bar.start_col / 7) * 100}% + 3px)`,
                             width: `calc(${(bar.span / 7) * 100}% - 6px)`,
@@ -215,24 +250,6 @@ export function CalendarGrid({
               </div>
             );
           })}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-brand-500" />
-            Exam performed (click for details)
-          </span>
-          {data.medications.slice(0, 6).map((med, index) => (
-            <span key={med.id} className="flex items-center gap-1.5">
-              <span
-                className={`h-2.5 w-4 rounded-full ${MED_COLORS[index % MED_COLORS.length]}`}
-              />
-              {med.name}
-            </span>
-          ))}
-          {data.medications.length > 6 && (
-            <Badge tone="gray">+{data.medications.length - 6} more</Badge>
-          )}
         </div>
       </div>
     </Card>

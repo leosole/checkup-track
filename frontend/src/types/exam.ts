@@ -22,6 +22,8 @@ export interface Exam {
   date_performed: string;
   pdf_path: string;
   markdown_path: string;
+  laboratory: string | null;
+  color: string | null;
   biomarkers: Biomarker[];
   extraction_error: string | null;
   processing: ExamProcessing | null;

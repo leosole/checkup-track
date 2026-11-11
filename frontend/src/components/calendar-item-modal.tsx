@@ -109,6 +109,14 @@ export function CalendarItemModal({
                 {item.exam.biomarkers.length} total
               </dd>
             </div>
+            <div className="col-span-2">
+              <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                Laboratory
+              </dt>
+              <dd className="mt-1 text-gray-900 dark:text-white">
+                {item.exam.laboratory || "Not reported"}
+              </dd>
+            </div>
           </dl>
           <div>
             <div className="mb-2 flex items-center justify-between">

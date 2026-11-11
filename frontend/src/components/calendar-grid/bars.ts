@@ -3,15 +3,26 @@ import { formatDate, parseIso } from "../../date-utils";
 import type { Bar, MedRowBounds } from "./types";
 
 export const MED_COLORS = [
-  "bg-brand-500",
-  "bg-sky-500",
-  "bg-emerald-500",
-  "bg-amber-500",
-  "bg-rose-500",
-  "bg-indigo-500",
-  "bg-teal-500",
-  "bg-orange-500",
+  "#8b5cf6",
+  "#0ea5e9",
+  "#10b981",
+  "#f59e0b",
+  "#f43f5e",
+  "#6366f1",
+  "#14b8a6",
+  "#f97316",
 ];
+
+/** Used when an exam has no saved calendar color. */
+export const DEFAULT_EXAM_COLOR = "#8b5cf6";
+
+/** Color a medication bar is drawn with (saved color, else the palette). */
+export function medicationColor(
+  medication: CalendarData["medications"][number],
+  index: number,
+): string {
+  return medication.color ?? MED_COLORS[index % MED_COLORS.length];
+}
 
 /** Month/day label used on a bar that runs past the edge of a week row. */
 export function shortDate(iso: string): string {
@@ -86,7 +97,7 @@ export function barsForWeek(
       id: `${med.id}-${index}`,
       medication_id: med.id,
       label: med.name,
-      color: MED_COLORS[index % MED_COLORS.length],
+      color: medicationColor(med, index),
       start_col,
       span,
       title: `${med.name} — ${formatDate(med.start_date)} to ${

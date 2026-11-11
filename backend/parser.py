@@ -102,6 +102,8 @@ against this JSON schema:
 Rules:
 - "title": the human-readable name of the exam panel or report (e.g. "Complete Blood Count").
 - "date_performed": the date the exam/sample was performed as YYYY-MM-DD, or null when truly absent.
+- "laboratory": the name of the laboratory, clinic, or provider that issued the report
+  (e.g. "LabCorp", "Quest Diagnostics"); null when it cannot be identified.
 - "biomarkers": every measurable result found in the document, as objects with:
     - "biomarker_name": canonical analyte name (e.g. "Glucose", "Hemoglobin", "LDL Cholesterol")
     - "value": numeric result value only (no units, no comparison signs)
@@ -182,6 +184,14 @@ def _merge_extractions(
         (item.date_performed for item in extractions if item.date_performed),
         None,
     )
+    laboratory = next(
+        (
+            item.laboratory.strip()
+            for item in extractions
+            if item.laboratory and item.laboratory.strip()
+        ),
+        None,
+    )
     biomarkers: List[ExamBiomarker] = []
     seen = set()
 
@@ -200,6 +210,7 @@ def _merge_extractions(
     return LLMExamsExtractionSchema(
         title=title,
         date_performed=performed,
+        laboratory=laboratory,
         biomarkers=biomarkers,
     )
 
@@ -530,6 +541,8 @@ def _to_response(
         date_performed=exam.date_performed,
         pdf_path=exam.pdf_path,
         markdown_path=exam.markdown_path,
+        laboratory=exam.laboratory,
+        color=exam.color,
         biomarkers=[
             BiomarkerResponse(
                 id=b.id,
@@ -695,6 +708,8 @@ def process_exam_job(exam_id: int) -> None:
                 return
             if not requested_title and merged.title:
                 exam.title = merged.title
+            if merged.laboratory:
+                exam.laboratory = merged.laboratory
             exam.date_performed = (
                 requested_date or merged.date_performed or _fallback_date(markdown)
             )
@@ -813,6 +828,13 @@ def process_exam(
     )
 
     # Step 4: insert rows scoped to the user.
+    laboratory = (
+        extraction.laboratory.strip()
+        if extraction is not None
+        and isinstance(extraction.laboratory, str)
+        and extraction.laboratory.strip()
+        else None
+    )
     with Session(engine) as session:
         exam = Exam(
             user_id=user_id,
@@ -820,6 +842,7 @@ def process_exam(
             date_performed=performed,
             pdf_path=pdf_ref,
             markdown_path=md_rel,
+            laboratory=laboratory,
         )
         session.add(exam)
         session.commit()

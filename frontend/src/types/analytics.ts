@@ -3,6 +3,7 @@ export interface TimeSeriesPoint {
   value: number;
   is_abnormal: boolean;
   exam_title: string;
+  reference_range: string | null;
 }
 
 export interface TimeSeries {

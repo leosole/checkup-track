@@ -12,6 +12,8 @@ export function ExamRenameModal({
 }: ExamRenameModalProps) {
   const [title, set_title] = useState("");
   const [date_performed, set_date_performed] = useState("");
+  const [laboratory, set_laboratory] = useState("");
+  const [color, set_color] = useState<string | null>(null);
   const [saving, set_saving] = useState(false);
   const [error, set_error] = useState<string | null>(null);
   const [retry_error, set_retry_error] = useState<string | null>(null);
@@ -20,6 +22,8 @@ export function ExamRenameModal({
     if (!exam) return;
     set_title(exam.title);
     set_date_performed(exam.date_performed);
+    set_laboratory(exam.laboratory ?? "");
+    set_color(exam.color);
     set_error(null);
   }, [exam]);
 
@@ -33,6 +37,8 @@ export function ExamRenameModal({
       await api.updateExam(exam.id, {
         title: title.trim(),
         date_performed,
+        laboratory: laboratory.trim() || null,
+        color,
       });
       await on_saved();
       on_close();
@@ -62,7 +68,7 @@ export function ExamRenameModal({
     <Modal
       open={exam !== null}
       title="Edit exam"
-      subtitle="Update the name and the date this exam was performed."
+      subtitle="Update the name, date, laboratory, and calendar color."
       onClose={on_close}
       footer={
         <>
@@ -110,6 +116,43 @@ export function ExamRenameModal({
           onChange={(event) => set_date_performed(event.target.value)}
           required
         />
+        <Input
+          label="Laboratory (optional)"
+          value={laboratory}
+          onChange={(event) => set_laboratory(event.target.value)}
+          maxLength={200}
+          placeholder="e.g., LabCorp"
+        />
+        <div>
+          <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Calendar color
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="size-7 overflow-hidden rounded-lg border-none">
+              <input
+                type="color"
+                aria-label="Exam calendar color"
+                value={color ?? "#8b5cf6"}
+                onChange={(event) => set_color(event.target.value)}
+                className="size-9 cursor-pointer border-none -ml-1 -mt-1"
+              />
+            </span>
+            {color ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => set_color(null)}
+              >
+                Use default
+              </Button>
+            ) : (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Default color
+              </span>
+            )}
+          </div>
+        </div>
       </form>
     </Modal>
   );

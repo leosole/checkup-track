@@ -2,6 +2,7 @@ export interface CalendarExam {
   id: number;
   title: string;
   date: string;
+  color: string | null;
 }
 
 export interface CalendarMedication {
@@ -9,6 +10,7 @@ export interface CalendarMedication {
   name: string;
   start_date: string;
   end_date: string | null;
+  color: string | null;
 }
 
 export interface CalendarData {

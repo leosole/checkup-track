@@ -57,6 +57,7 @@ export function AnalyticsChartPlot({
             date: point.date,
             exam_title: point.exam_title,
             is_abnormal: point.is_abnormal,
+            reference_range: point.reference_range,
             color,
           };
         }
@@ -192,7 +193,7 @@ export function AnalyticsChartPlot({
                       <title>
                         {`${path.spec}: ${point.value} ${path.unit} on ${formatDate(point.date)}${
                           point.is_abnormal ? " (abnormal)" : ""
-                        } — ${point.exam_title}`}
+                        }${point.reference_range ? `, normal range ${point.reference_range}` : ""} — ${point.exam_title}`}
                       </title>
                     </circle>
                   </g>
@@ -231,6 +232,14 @@ export function AnalyticsChartPlot({
             <span className="font-medium text-gray-300">{tooltip.unit}</span>
           </p>
           <p className="mt-1 text-gray-300">{formatDate(tooltip.date)}</p>
+          <p className="text-gray-300">
+            Normal range:{" "}
+            <span className="font-medium text-white">
+              {tooltip.reference_range
+                ? `${tooltip.reference_range}${tooltip.unit ? ` ${tooltip.unit}` : ""}`
+                : "Not reported"}
+            </span>
+          </p>
           <p className="truncate text-gray-400">{tooltip.exam_title}</p>
         </div>
       )}

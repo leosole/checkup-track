@@ -108,19 +108,31 @@ def init_db() -> None:
     )
 
     SQLModel.metadata.create_all(engine)
-    columns = {
-        column["name"] for column in inspect(engine).get_columns("examprocessingjob")
-    }
-    if "requested_date" not in columns:
+    # create_all never alters an existing table, so new nullable columns are
+    # added here. Each entry is (table, column, SQL type).
+    new_columns = (
+        ("examprocessingjob", "requested_date", "DATE"),
+        ("exam", "laboratory", "VARCHAR(200)"),
+        ("exam", "color", "VARCHAR(7)"),
+        ("medication", "color", "VARCHAR(7)"),
+    )
+    existing_columns: dict[str, set[str]] = {}
+    for table, column, column_type in new_columns:
+        if table not in existing_columns:
+            existing_columns[table] = {
+                item["name"] for item in inspect(engine).get_columns(table)
+            }
+        if column in existing_columns[table]:
+            continue
         try:
             with engine.begin() as connection:
                 connection.execute(
-                    text("ALTER TABLE examprocessingjob ADD COLUMN requested_date DATE")
+                    text(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
                 )
+            existing_columns[table].add(column)
         except Exception:
-            if "requested_date" not in {
-                column["name"]
-                for column in inspect(engine).get_columns("examprocessingjob")
+            if column not in {
+                item["name"] for item in inspect(engine).get_columns(table)
             }:
                 raise
 

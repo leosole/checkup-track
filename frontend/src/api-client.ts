@@ -223,7 +223,12 @@ export const api = {
 
   updateExam(
     id: number,
-    input: { title?: string; date_performed?: string },
+    input: {
+      title?: string;
+      date_performed?: string;
+      laboratory?: string | null;
+      color?: string | null;
+    },
   ): Promise<Exam> {
     return request(`/api/exams/${id}`, {
       method: "PATCH",

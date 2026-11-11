@@ -97,6 +97,7 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
                 id: exam.id,
                 title: exam.title,
                 date: exam.date_performed,
+                color: exam.color,
               })),
             }));
           }

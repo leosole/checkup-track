@@ -1,11 +1,26 @@
 """Database models (SQLModel tables) and API/LLM schemas (Pydantic)."""
 
+import re
 from datetime import date, datetime, timezone
 from enum import Enum
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field as PydanticField, field_validator
 from sqlmodel import Field, SQLModel
+
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _normalize_color(value: Optional[str]) -> Optional[str]:
+    """Keep colors as ``#rrggbb`` (or None for "use the default")."""
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    if not HEX_COLOR_RE.match(value):
+        raise ValueError("Color must be a hex value like #7c3aed.")
+    return value.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -33,6 +48,10 @@ class Exam(SQLModel, table=True):
     date_performed: date
     pdf_path: str
     markdown_path: str
+    # Laboratory that produced the report; usually extracted, user-settable.
+    laboratory: Optional[str] = None
+    # Calendar color; None means the default exam color.
+    color: Optional[str] = None
 
 
 class ExamProcessingJob(SQLModel, table=True):
@@ -69,6 +88,8 @@ class Medication(SQLModel, table=True):
     frequency_per_day: int
     start_date: date
     end_date: Optional[date] = None
+    # Calendar color; None means the rotating default palette color.
+    color: Optional[str] = None
 
 
 class ShareGrant(SQLModel, table=True):
@@ -106,6 +127,7 @@ class ShareMedication(SQLModel, table=True):
 class LLMExamsExtractionSchema(BaseModel):
     title: str
     date_performed: Optional[date]
+    laboratory: Optional[str] = None
     biomarkers: List[ExamBiomarker]
 
 
@@ -200,6 +222,8 @@ class ExamResponse(BaseModel):
     date_performed: date
     pdf_path: str
     markdown_path: str
+    laboratory: Optional[str] = None
+    color: Optional[str] = None
     biomarkers: List[BiomarkerResponse] = []
     extraction_error: Optional[str] = None
     processing: Optional["ExamProcessingResponse"] = None
@@ -220,6 +244,12 @@ class MedicationCreate(BaseModel):
     frequency_per_day: int = PydanticField(ge=1, le=32)
     start_date: date
     end_date: Optional[date] = None
+    color: Optional[str] = None
+
+    @field_validator("color")
+    @classmethod
+    def color_must_be_hex(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_color(value)
 
 
 class MedicationResponse(BaseModel):
@@ -229,6 +259,7 @@ class MedicationResponse(BaseModel):
     frequency_per_day: int
     start_date: date
     end_date: Optional[date] = None
+    color: Optional[str] = None
 
 
 class MedicationUpdate(BaseModel):
@@ -242,6 +273,12 @@ class MedicationUpdate(BaseModel):
     frequency_per_day: Optional[int] = PydanticField(default=None, ge=1, le=32)
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    color: Optional[str] = None
+
+    @field_validator("color")
+    @classmethod
+    def color_must_be_hex(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_color(value)
 
 
 class ExamUpdate(BaseModel):
@@ -249,6 +286,8 @@ class ExamUpdate(BaseModel):
 
     title: Optional[str] = PydanticField(default=None, min_length=1, max_length=200)
     date_performed: Optional[date] = None
+    laboratory: Optional[str] = PydanticField(default=None, max_length=200)
+    color: Optional[str] = None
 
     @field_validator("title")
     @classmethod
@@ -259,6 +298,18 @@ class ExamUpdate(BaseModel):
         if not value:
             raise ValueError("Exam title must not be blank.")
         return value
+
+    @field_validator("laboratory")
+    @classmethod
+    def trim_laboratory(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.strip() or None
+
+    @field_validator("color")
+    @classmethod
+    def color_must_be_hex(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_color(value)
 
 
 class ManualBiomarkerInput(BaseModel):
@@ -299,6 +350,7 @@ class CalendarExam(BaseModel):
     id: int
     title: str
     date: date
+    color: Optional[str] = None
 
 
 class CalendarMedication(BaseModel):
@@ -306,6 +358,7 @@ class CalendarMedication(BaseModel):
     name: str
     start_date: date
     end_date: Optional[date] = None
+    color: Optional[str] = None
 
 
 class CalendarResponse(BaseModel):
@@ -318,6 +371,7 @@ class TimeSeriesPoint(BaseModel):
     value: float
     is_abnormal: bool
     exam_title: str
+    reference_range: Optional[str] = None
 
 
 class TimeSeries(BaseModel):

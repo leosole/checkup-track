@@ -5,6 +5,7 @@ export interface Medication {
   frequency_per_day: number;
   start_date: string;
   end_date: string | null;
+  color: string | null;
 }
 
 export interface MedicationInput {
@@ -13,4 +14,5 @@ export interface MedicationInput {
   frequency_per_day: number;
   start_date: string;
   end_date: string | null;
+  color?: string | null;
 }

@@ -81,5 +81,6 @@ export interface Tooltip {
   date: string;
   exam_title: string;
   is_abnormal: boolean;
+  reference_range: string | null;
   color: string;
 }
