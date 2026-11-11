@@ -13,6 +13,7 @@ import type {
 import { EmptyState, Spinner } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { notify } from "../components/ui/toast";
+import { toggleSort } from "../sort-utils";
 import type { Medication } from "../types";
 
 function MedicationsPage() {
@@ -24,7 +25,10 @@ function MedicationsPage() {
   const [status, set_status] = useState<MedicationStatus>("all");
   const [start_from, set_start_from] = useState("");
   const [start_to, set_start_to] = useState("");
-  const [sort, set_sort] = useState<MedicationSort>("newest");
+  const [sort, set_sort] = useState<MedicationSort>({
+    field: "start_date",
+    direction: "desc",
+  });
   const [editing_med, set_editing_med] = useState<Medication | null>(null);
   const [modal_open, set_modal_open] = useState(false);
   const [deleting_id, set_deleting_id] = useState<number | null>(null);
@@ -52,10 +56,11 @@ function MedicationsPage() {
       );
     })
     .sort((left, right) => {
-      if (sort === "name-asc") return left.name.localeCompare(right.name);
-      if (sort === "name-desc") return right.name.localeCompare(left.name);
-      const date_order = left.start_date.localeCompare(right.start_date);
-      return sort === "newest" ? -date_order : date_order;
+      const factor = sort.direction === "asc" ? 1 : -1;
+      if (sort.field === "name") {
+        return factor * left.name.localeCompare(right.name);
+      }
+      return factor * left.start_date.localeCompare(right.start_date);
     });
 
   async function deleteMedication(medication: Medication) {
@@ -141,12 +146,10 @@ function MedicationsPage() {
             status={status}
             start_from={start_from}
             start_to={start_to}
-            sort={sort}
             on_query_change={set_query}
             on_status_change={set_status}
             on_start_from_change={set_start_from}
             on_start_to_change={set_start_to}
-            on_sort_change={set_sort}
           />
 
           {error && (
@@ -183,6 +186,10 @@ function MedicationsPage() {
               can_delete={Boolean(user?.capabilities.delete_records)}
               deleting_id={deleting_id}
               isActive={isActive}
+              sort={sort}
+              on_sort_change={(field) =>
+                set_sort((current) => toggleSort(current, field))
+              }
               on_edited_medication={(medicationId: number) => {
                 const medication = medications.find(
                   (item) => item.id === medicationId,

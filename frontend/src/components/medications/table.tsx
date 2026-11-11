@@ -1,5 +1,6 @@
 import { formatDate } from "../../date-utils";
 import { Badge } from "../ui/badge";
+import { SortableTh } from "../ui/sortable-th";
 import type { MedicationTableProps } from "./types";
 
 /** Medication rows with active status and row actions. */
@@ -8,6 +9,8 @@ export function MedicationTable({
   can_delete,
   deleting_id,
   isActive,
+  sort,
+  on_sort_change,
   on_edited_medication,
   on_deleted_medication,
 }: MedicationTableProps) {
@@ -16,18 +19,22 @@ export function MedicationTable({
       <table className="w-full min-w-[780px] border-collapse text-left">
         <thead>
           <tr className="border-b border-gray-200 text-xs font-medium uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
-            <th scope="col" className="px-4 py-3">
+            <SortableTh field="name" sort={sort} on_sort_change={on_sort_change}>
               Medication
-            </th>
+            </SortableTh>
             <th scope="col" className="px-4 py-3">
               Dosage
             </th>
             <th scope="col" className="px-4 py-3">
               Frequency
             </th>
-            <th scope="col" className="px-4 py-3">
+            <SortableTh
+              field="start_date"
+              sort={sort}
+              on_sort_change={on_sort_change}
+            >
               Dates
-            </th>
+            </SortableTh>
             <th scope="col" className="px-4 py-3">
               Status
             </th>

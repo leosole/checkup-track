@@ -57,6 +57,21 @@ export interface ModalProps {
   footer?: ReactNode;
 }
 
+export type SortDirection = "asc" | "desc";
+
+export interface SortState<Field extends string> {
+  field: Field;
+  direction: SortDirection;
+}
+
+export interface SortableThProps<Field extends string> {
+  field: Field;
+  sort: SortState<Field>;
+  on_sort_change: (field: Field) => void;
+  className?: string;
+  children: ReactNode;
+}
+
 export type ToastKind = "success" | "error" | "info" | "default";
 
 export interface ToastStyle {

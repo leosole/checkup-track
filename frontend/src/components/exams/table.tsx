@@ -1,6 +1,7 @@
 import { formatDate } from "../../date-utils";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { SortableTh } from "../ui/sortable-th";
 import type { ExamTableProps } from "./types";
 
 /** Exam rows with extraction status and per-row actions. */
@@ -11,6 +12,8 @@ export function ExamTable({
   retrying_exam_id,
   retry_error,
   deleting_id,
+  sort,
+  on_sort_change,
   on_select_exam,
   on_edited_exam,
   on_deleted_exam,
@@ -19,14 +22,21 @@ export function ExamTable({
 }: ExamTableProps) {
   return (
     <div className="overflow-x-auto rounded-lg bg-white ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-800">
-      <table className="w-full min-w-[620px] border-collapse text-left">
+      <table className="w-full min-w-[780px] border-collapse text-left">
         <thead>
           <tr className="border-b border-gray-200 text-xs font-medium uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
-            <th scope="col" className="px-4 py-3">
+            <SortableTh field="title" sort={sort} on_sort_change={on_sort_change}>
               Exam
-            </th>
-            <th scope="col" className="px-4 py-3">
+            </SortableTh>
+            <SortableTh
+              field="date_performed"
+              sort={sort}
+              on_sort_change={on_sort_change}
+            >
               Date
+            </SortableTh>
+            <th scope="col" className="px-4 py-3">
+              Laboratory
             </th>
             <th scope="col" className="px-4 py-3">
               Biomarkers
@@ -75,6 +85,9 @@ export function ExamTable({
                 </th>
                 <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">
                   {formatDate(exam.date_performed)}
+                </td>
+                <td className="max-w-[200px] truncate whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">
+                  {exam.laboratory || "—"}
                 </td>
                 <td className="px-4 py-3">
                   {status_label ? (

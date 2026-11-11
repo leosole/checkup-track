@@ -1,24 +1,18 @@
-import type {
-  MedicationFiltersProps,
-  MedicationSort,
-  MedicationStatus,
-} from "./types";
+import type { MedicationFiltersProps, MedicationStatus } from "./types";
 
-/** Search, status, date and sort controls for the medication list. */
+/** Search, status and date controls for the medication list. */
 export function MedicationFilters({
   query,
   status,
   start_from,
   start_to,
-  sort,
   on_query_change,
   on_status_change,
   on_start_from_change,
   on_start_to_change,
-  on_sort_change,
 }: MedicationFiltersProps) {
   return (
-    <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="sm:col-span-2 lg:col-span-2">
         <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
           Search
@@ -70,23 +64,6 @@ export function MedicationFilters({
           onChange={(event) => on_start_to_change(event.target.value)}
           className="w-full rounded-lg border-0 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-brand-600 dark:bg-gray-900 dark:text-gray-100 dark:ring-gray-700"
         />
-      </label>
-      <label>
-        <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
-          Sort by
-        </span>
-        <select
-          value={sort}
-          onChange={(event) =>
-            on_sort_change(event.target.value as MedicationSort)
-          }
-          className="w-full rounded-lg border-0 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-brand-600 dark:bg-gray-900 dark:text-gray-100 dark:ring-gray-700"
-        >
-          <option value="newest">Start date, newest</option>
-          <option value="oldest">Start date, oldest</option>
-          <option value="name-asc">Name A to Z</option>
-          <option value="name-desc">Name Z to A</option>
-        </select>
       </label>
     </div>
   );

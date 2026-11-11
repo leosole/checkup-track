@@ -4,6 +4,7 @@ import { api } from "../api-client";
 import { useAuth } from "../auth-context";
 import { useDashboardState } from "../components/dashboard/provider";
 import { ExamStatus, ExamSort } from "../components/exams/types";
+import { toggleSort } from "../sort-utils";
 import { EmptyState, Spinner } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { notify } from "../components/ui/toast";
@@ -20,7 +21,10 @@ function ExamsPage() {
   const [status, set_status] = useState<ExamStatus>("all");
   const [start_date, set_start_date] = useState("");
   const [end_date, set_end_date] = useState("");
-  const [sort, set_sort] = useState<ExamSort>("newest");
+  const [sort, set_sort] = useState<ExamSort>({
+    field: "date_performed",
+    direction: "desc",
+  });
   const [deleting_id, set_deleting_id] = useState<number | null>(null);
   const [error, set_error] = useState<string | null>(null);
 
@@ -38,6 +42,7 @@ function ExamsPage() {
       const matches_query =
         !normalized_query ||
         exam.title.toLowerCase().includes(normalized_query) ||
+        Boolean(exam.laboratory?.toLowerCase().includes(normalized_query)) ||
         exam.biomarkers.some((biomarker) =>
           biomarker.biomarker_name.toLowerCase().includes(normalized_query),
         );
@@ -51,12 +56,11 @@ function ExamsPage() {
       );
     })
     .sort((left, right) => {
-      if (sort === "title-asc") return left.title.localeCompare(right.title);
-      if (sort === "title-desc") return right.title.localeCompare(left.title);
-      const date_order = left.date_performed.localeCompare(
-        right.date_performed,
-      );
-      return sort === "newest" ? -date_order : date_order;
+      const factor = sort.direction === "asc" ? 1 : -1;
+      if (sort.field === "title") {
+        return factor * left.title.localeCompare(right.title);
+      }
+      return factor * left.date_performed.localeCompare(right.date_performed);
     });
 
   async function deleteExam(exam: Exam) {
@@ -135,12 +139,10 @@ function ExamsPage() {
             status={status}
             start_date={start_date}
             end_date={end_date}
-            sort={sort}
             on_query_change={set_query}
             on_status_change={set_status}
             on_start_date_change={set_start_date}
             on_end_date_change={set_end_date}
-            on_sort_change={set_sort}
           />
 
           {error && (
@@ -179,6 +181,10 @@ function ExamsPage() {
               retrying_exam_id={dash.retrying_exam_id}
               retry_error={dash.retry_error}
               deleting_id={deleting_id}
+              sort={sort}
+              on_sort_change={(field) =>
+                set_sort((current) => toggleSort(current, field))
+              }
               on_select_exam={(exam: Exam) => void dash.showCalendarExam(exam.id)}
               on_edited_exam={(examId: number) => {
                 const exam = exams.find((item) => item.id === examId);
