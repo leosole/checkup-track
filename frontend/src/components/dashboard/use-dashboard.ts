@@ -394,8 +394,10 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
     }
   }
 
+  // While the first response for a new term is still in flight the results are
+  // null; keep showing the recent exams so the list never flashes empty.
   const displayed = search_query.trim()
-    ? (search_results ?? [])
+    ? (search_results ?? exams.slice(0, 5))
     : exams.slice(0, 5);
 
   const abnormal_count = exams.reduce(

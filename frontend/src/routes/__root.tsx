@@ -25,11 +25,7 @@ function DashboardFrame() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <DashboardHeader
         user={user}
-        route={dash.route}
-        search_query={dash.search_query}
-        searching={dash.searching}
         theme={dash.theme}
-        on_search_query_change={dash.set_search_query}
         on_navigate={(next_route) => void navigate({ to: next_route })}
         on_toggle_theme={dash.toggleTheme}
         on_sign_out={signOut}

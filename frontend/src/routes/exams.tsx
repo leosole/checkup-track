@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { api } from "../api-client";
+import { AnalyticsChart } from "../components/analytics-chart";
 import { useAuth } from "../auth-context";
 import { useDashboardState } from "../components/dashboard/provider";
 import { ExamStatus, ExamSort } from "../components/exams/types";
@@ -198,6 +199,15 @@ function ExamsPage() {
               on_retried_exam={(id) => dash.retryExam(id)}
             />
           )}
+
+          <div className="mt-6">
+            <AnalyticsChart
+              exams={exams}
+              exams_loading={dash.loading}
+              selected={dash.plot_markers}
+              on_toggle_spec={dash.toggleMarker}
+            />
+          </div>
         </section>
       )}
     </main>

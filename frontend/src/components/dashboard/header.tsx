@@ -1,16 +1,11 @@
 import { TbMoonFilled, TbSunLowFilled } from "react-icons/tb";
 import { useNavigate } from "@tanstack/react-router";
 import type { DashboardHeaderProps } from "./types";
-import { Spinner } from "../ui/badge";
 import { Logo } from "../logo";
 
 export function DashboardHeader({
   user,
-  route,
-  search_query,
-  searching,
   theme,
-  on_search_query_change,
   on_toggle_theme,
   on_sign_out,
 }: DashboardHeaderProps) {
@@ -33,34 +28,6 @@ export function DashboardHeader({
           </div>
         </button>
 
-        <div
-          className={`relative w-full max-w-md ${route !== "/" ? "hidden" : ""}`}
-        >
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <input
-            type="search"
-            value={search_query}
-            onChange={(event) => on_search_query_change(event.target.value)}
-            placeholder="Search exams, biomarkers, ranges…"
-            aria-label="Global search"
-            className="w-full rounded-lg border-0 bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-inset ring-transparent placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-brand-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:bg-gray-900"
-          />
-          {searching && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2">
-              <Spinner className="h-4 w-4" />
-            </span>
-          )}
-        </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <button

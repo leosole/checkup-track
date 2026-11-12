@@ -16,7 +16,9 @@ export function DashboardExamList() {
   const displayed = dash.displayed;
   const loading = dash.loading;
   const search_query = dash.search_query;
+  const search_results = dash.search_results;
   const searching = dash.searching;
+  const set_search_query = dash.set_search_query;
   const renaming_id = dash.renaming_id;
   const rename_value = dash.rename_value;
   const plot_markers = dash.plot_markers;
@@ -36,7 +38,7 @@ export function DashboardExamList() {
   const retryExam = (id: number) => void dash.retryExam(id);
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">
             {search_query.trim() ? "Search results" : "Recent exams"}
@@ -51,16 +53,55 @@ export function DashboardExamList() {
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          {searching && <Spinner className="h-4 w-4" />}
-          {!search_query.trim() && exams.length > 0 && (
+        <div className="relative w-full sm:w-72 sm:shrink-0">
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <input
+            type="search"
+            value={search_query}
+            onChange={(event) => set_search_query(event.target.value)}
+            placeholder="Search exams, biomarkers, ranges…"
+            aria-label="Search exams"
+            className="w-full rounded-lg border-0 bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-inset ring-transparent placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-brand-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:bg-gray-900"
+          />
+          {searching && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+              <Spinner className="h-4 w-4" />
+            </span>
+          )}
+        </div>
+        <div className="ml-auto flex items-center gap-3">
+          {search_query.trim() ? (
             <button
               type="button"
-              onClick={() => void navigate({ to: "/exams" })}
-              className="text-sm font-semibold text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
+              onClick={() => set_search_query("")}
+              className="text-sm font-medium text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
             >
-              View more
+              Clear search
+              {search_results
+                ? ` (${search_results.length} result${search_results.length === 1 ? "" : "s"})`
+                : ""}
             </button>
+          ) : (
+            exams.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void navigate({ to: "/exams" })}
+                className="text-sm font-semibold text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
+              >
+                View more
+              </button>
+            )
           )}
         </div>
       </div>

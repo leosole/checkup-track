@@ -10,19 +10,19 @@ const TOAST_STYLES: Record<ToastKind, ToastStyle> = {
   success: {
     Icon: FiCheckCircle,
     wrapper:
-      "bg-brand-50 text-brand-900 ring-brand-200 dark:bg-brand-500/15 dark:text-brand-100 dark:ring-brand-500/30",
+      "bg-brand-50 text-brand-900 ring-brand-200 dark:bg-brand-900 dark:text-brand-100 dark:ring-brand-500",
     icon_class: "text-brand-600 dark:text-brand-300",
   },
   error: {
     Icon: FiAlertCircle,
     wrapper:
-      "bg-rose-50 text-rose-900 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-100 dark:ring-rose-500/30",
+      "bg-rose-50 text-rose-900 ring-rose-200 dark:bg-rose-900 dark:text-rose-100 dark:ring-rose-500",
     icon_class: "text-rose-600 dark:text-rose-300",
   },
   info: {
     Icon: FiInfo,
     wrapper:
-      "bg-amber-50 text-amber-900 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-100 dark:ring-amber-500/30",
+      "bg-amber-50 text-amber-900 ring-amber-200 dark:bg-amber-900 dark:text-amber-100 dark:ring-amber-500",
     icon_class: "text-amber-600 dark:text-amber-300",
   },
   default: {

@@ -23,11 +23,7 @@ export interface DashboardStatCardProps {
 
 export interface DashboardHeaderProps {
   user: User | null;
-  route: DashboardRoute;
-  search_query: string;
-  searching: boolean;
   theme: Theme;
-  on_search_query_change: (query: string) => void;
   on_navigate: (route: DashboardRoute) => void;
   on_toggle_theme: () => void;
   on_sign_out: () => void;

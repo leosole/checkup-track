@@ -16,10 +16,8 @@ function DashboardPage() {
     exams,
     medications,
     calendar,
-    displayed,
     loading,
     load_error,
-    search_query,
     plot_markers,
     abnormal_count,
     active_meds,
@@ -47,16 +45,6 @@ function DashboardPage() {
         <Button variant="secondary" onClick={() => void navigate({ to: "/share" })}>
           Share data
         </Button>
-        {search_query.trim() && (
-          <button
-            type="button"
-            onClick={() => dash.set_search_query("")}
-            className="ml-auto text-sm font-medium text-brand-700 hover:text-brand-900 dark:text-brand-300 dark:hover:text-brand-200"
-          >
-            Clear search ({displayed.length} result
-            {displayed.length === 1 ? "" : "s"})
-          </button>
-        )}
       </div>
 
       {load_error && (
