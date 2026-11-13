@@ -148,6 +148,20 @@ class ShareSymptom(SQLModel, table=True):
     occurrence_id: int = Field(foreign_key="symptomoccurrence.id", primary_key=True)
 
 
+class ShareGroupTitle(SQLModel, table=True):
+    """A user-chosen name for one share group (an exact selection of records).
+
+    Groups are derived from the selected record ids rather than stored, so the
+    name lives in its own table keyed by that derived group key.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_id: str = Field(foreign_key="user.id", index=True)
+    group_key: str = Field(index=True)
+    title: str
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 # ---------------------------------------------------------------------------
 # The strict LLM structured format
 # ---------------------------------------------------------------------------
@@ -552,10 +566,26 @@ class SharedSymptomSummary(BaseModel):
     occurrences: List[SharedSymptomOccurrenceSummary] = []
 
 
+class ShareGroupTitleUpdate(BaseModel):
+    """Rename one share group; ``title=None`` clears the name."""
+
+    group_key: str = PydanticField(min_length=1, max_length=2000)
+    title: Optional[str] = PydanticField(default=None, max_length=120)
+
+    @field_validator("title")
+    @classmethod
+    def blank_title_clears(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
 class ShareGroupResponse(BaseModel):
     """Every code ever issued for one exact selection of records."""
 
     group_key: str
+    title: Optional[str] = None
     exam_ids: List[int] = []
     medication_ids: List[int] = []
     symptom_occurrence_ids: List[int] = []

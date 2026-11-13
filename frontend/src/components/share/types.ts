@@ -46,12 +46,22 @@ export interface SymptomSelectionCardProps {
   on_toggle_group: (occurrence_ids: number[], all_selected: boolean) => void;
 }
 
+export interface GroupTitleProps {
+  title: string | null;
+  saving: boolean;
+  /** Passing null clears the group name. */
+  on_save: (title: string | null) => void;
+}
+
 export interface GroupListProps {
   groups: ShareGroup[];
   loading: boolean;
   sharing_group_key: string | null;
+  renaming_group_key: string | null;
   revoking_id: number | null;
   can_revoke: boolean;
+  can_rename: boolean;
   on_share_again: (group: ShareGroup) => void;
+  on_rename: (group_key: string, title: string | null) => void;
   on_revoke: (code_id: number) => void;
 }

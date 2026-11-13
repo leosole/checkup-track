@@ -39,6 +39,7 @@ export interface SharedSymptom {
 
 export interface ShareGroup {
   group_key: string;
+  title: string | null;
   exam_ids: number[];
   medication_ids: number[];
   symptom_occurrence_ids: number[];

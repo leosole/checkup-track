@@ -87,6 +87,8 @@ from models import (
     ShareExam,
     ShareGrant,
     ShareGroupResponse,
+    ShareGroupTitle,
+    ShareGroupTitleUpdate,
     ShareMedication,
     ShareSymptom,
     SharedExamSummary,
@@ -1345,10 +1347,9 @@ def create_share(
     )
 
 
-@app.get("/api/shares", response_model=List[ShareGroupResponse], tags=["shares"])
-def list_share_groups(
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
+def _share_group_responses(
+    session: Session,
+    user: User,
 ) -> List[ShareGroupResponse]:
     """List every selection the user has shared, grouped, with a share count."""
     shares = session.exec(
@@ -1408,6 +1409,13 @@ def list_share_groups(
         )
         group["shares"].append(share)  # type: ignore[union-attr]
 
+    titles = {
+        row.group_key: row.title
+        for row in session.exec(
+            select(ShareGroupTitle).where(ShareGroupTitle.owner_id == user.id)
+        ).all()
+    }
+
     result: List[ShareGroupResponse] = []
     for key, group in groups.items():
         exam_ids = group["exam_ids"]
@@ -1418,6 +1426,7 @@ def list_share_groups(
         result.append(
             ShareGroupResponse(
                 group_key=key,
+                title=titles.get(key),
                 exam_ids=exam_ids,  # type: ignore[arg-type]
                 medication_ids=medication_ids,  # type: ignore[arg-type]
                 symptom_occurrence_ids=symptom_ids,  # type: ignore[arg-type]
@@ -1452,6 +1461,61 @@ def list_share_groups(
 
     result.sort(key=lambda item: item.last_shared_at, reverse=True)
     return result
+
+
+@app.get("/api/shares", response_model=List[ShareGroupResponse], tags=["shares"])
+def list_share_groups(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> List[ShareGroupResponse]:
+    """List every selection the user has shared, grouped, with a share count."""
+    return _share_group_responses(session, user)
+
+
+@app.patch(
+    "/api/shares/groups",
+    response_model=List[ShareGroupResponse],
+    tags=["shares"],
+)
+def rename_share_group(
+    payload: ShareGroupTitleUpdate,
+    user: User = Depends(require_capability("create_shares")),
+    session: Session = Depends(get_session),
+) -> List[ShareGroupResponse]:
+    """Name or rename one share group; an empty title clears the name."""
+    if not any(
+        group.group_key == payload.group_key
+        for group in _share_group_responses(session, user)
+    ):
+        raise HTTPException(status_code=404, detail="Share group not found.")
+
+    existing = session.exec(
+        select(ShareGroupTitle).where(
+            ShareGroupTitle.owner_id == user.id,
+            ShareGroupTitle.group_key == payload.group_key,
+        )
+    ).first()
+    if payload.title is None:
+        if existing is not None:
+            session.delete(existing)
+            session.commit()
+    elif existing is None:
+        session.add(
+            ShareGroupTitle(
+                owner_id=user.id,
+                group_key=payload.group_key,
+                title=payload.title,
+                updated_at=_utcnow(),
+            )
+        )
+        session.commit()
+    else:
+        existing.title = payload.title
+        existing.updated_at = _utcnow()
+        session.add(existing)
+        session.commit()
+
+    return _share_group_responses(session, user)
 
 
 @app.delete("/api/shares/{share_id}", status_code=204, tags=["shares"])

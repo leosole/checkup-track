@@ -39,6 +39,9 @@ function SharePage() {
   const [sharing_group_key, set_sharing_group_key] = useState<string | null>(
     null,
   );
+  const [renaming_group_key, set_renaming_group_key] = useState<string | null>(
+    null,
+  );
   const [revoking_id, set_revoking_id] = useState<number | null>(null);
   const [created, set_created] = useState<ShareCreated | null>(null);
   const [copied, set_copied] = useState<CopyTarget | null>(null);
@@ -201,6 +204,20 @@ function SharePage() {
     }
   }
 
+  async function renameGroup(group_key: string, title: string | null) {
+    set_renaming_group_key(group_key);
+    set_error(null);
+    try {
+      set_groups(await api.renameShareGroup(group_key, title));
+    } catch (err) {
+      set_error(
+        err instanceof Error ? err.message : "Could not rename the group.",
+      );
+    } finally {
+      set_renaming_group_key(null);
+    }
+  }
+
   async function revoke(code_id: number) {
     if (!user?.capabilities.revoke_shares) return;
     if (
@@ -352,9 +369,12 @@ function SharePage() {
         groups={groups}
         loading={loading_groups}
         sharing_group_key={sharing_group_key}
+        renaming_group_key={renaming_group_key}
         revoking_id={revoking_id}
         can_revoke={Boolean(user?.capabilities.revoke_shares)}
+        can_rename={Boolean(user?.capabilities.create_shares)}
         on_share_again={(group) => void shareAgain(group)}
+        on_rename={(group_key, title) => void renameGroup(group_key, title)}
         on_revoke={(code_id) => void revoke(code_id)}
       />
     </main>

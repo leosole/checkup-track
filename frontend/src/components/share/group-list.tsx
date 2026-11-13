@@ -1,5 +1,6 @@
 import { Badge, Card, EmptyState, Spinner } from "../ui/badge";
 import { Button } from "../ui/button";
+import { GroupTitle } from "./group-title";
 import { STATUS_TONES, formatTimestamp, plural } from "./share-utils";
 import type { GroupListProps } from "./types";
 
@@ -8,9 +9,12 @@ export function GroupList({
   groups,
   loading,
   sharing_group_key,
+  renaming_group_key,
   revoking_id,
   can_revoke,
+  can_rename,
   on_share_again,
+  on_rename,
   on_revoke,
 }: GroupListProps) {
   const total_codes = groups.reduce(
@@ -50,9 +54,21 @@ export function GroupList({
             <Card key={group.group_key} className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                      Shared {plural(group.times_shared, "time")}
+                  {can_rename ? (
+                    <GroupTitle
+                      title={group.title}
+                      saving={renaming_group_key === group.group_key}
+                      on_save={(title) => on_rename(group.group_key, title)}
+                    />
+                  ) : (
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                      {group.title ?? "Untitled group"}
+                    </p>
+                  )}
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Shared {plural(group.times_shared, "time")} · last shared{" "}
+                      {formatTimestamp(group.last_shared_at)}
                     </p>
                     {group.active_codes > 0 && (
                       <Badge tone="success">
@@ -60,9 +76,6 @@ export function GroupList({
                       </Badge>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Last shared {formatTimestamp(group.last_shared_at)}
-                  </p>
                 </div>
                 <Button
                   size="sm"

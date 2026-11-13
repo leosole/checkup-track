@@ -17,6 +17,7 @@ from models import (
     Medication,
     ShareCreate,
     ShareGrant,
+    ShareGroupTitleUpdate,
     Symptom,
     SymptomOccurrence,
     User,
@@ -301,6 +302,46 @@ class ShareTests(unittest.TestCase):
 
         other_groups = main.list_share_groups(self.other_user, self.session)
         self.assertEqual(other_groups, [])
+
+    def test_group_title_can_be_set_renamed_and_cleared(self) -> None:
+        created = self.create([self.exam_a.id])
+
+        named = main.rename_share_group(
+            ShareGroupTitleUpdate(group_key=created.group_key, title="  Cardiology "),
+            self.user,
+            self.session,
+        )
+        self.assertEqual(named[0].title, "Cardiology")
+
+        # Sharing the same selection again keeps the group (and its name).
+        self.create([self.exam_a.id])
+        groups = main.list_share_groups(self.user, self.session)
+        self.assertEqual([group.title for group in groups], ["Cardiology"])
+
+        renamed = main.rename_share_group(
+            ShareGroupTitleUpdate(group_key=created.group_key, title="Annual visit"),
+            self.user,
+            self.session,
+        )
+        self.assertEqual(renamed[0].title, "Annual visit")
+
+        cleared = main.rename_share_group(
+            ShareGroupTitleUpdate(group_key=created.group_key, title="   "),
+            self.user,
+            self.session,
+        )
+        self.assertIsNone(cleared[0].title)
+
+    def test_cannot_rename_another_users_group(self) -> None:
+        created = self.create([self.exam_a.id])
+
+        with self.assertRaises(HTTPException) as raised:
+            main.rename_share_group(
+                ShareGroupTitleUpdate(group_key=created.group_key, title="Mine"),
+                self.other_user,
+                self.session,
+            )
+        self.assertEqual(raised.exception.status_code, 404)
 
     def test_revoking_ends_an_active_guest_session(self) -> None:
         created = self.create([self.exam_a.id])

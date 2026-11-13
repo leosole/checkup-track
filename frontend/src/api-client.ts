@@ -336,6 +336,13 @@ export const api = {
     return request("/api/shares");
   },
 
+  renameShareGroup(group_key: string, title: string | null): Promise<ShareGroup[]> {
+    return request("/api/shares/groups", {
+      method: "PATCH",
+      body: JSON.stringify({ group_key, title }),
+    });
+  },
+
   revokeShare(id: number): Promise<void> {
     return request(`/api/shares/${id}`, { method: "DELETE" });
   },
