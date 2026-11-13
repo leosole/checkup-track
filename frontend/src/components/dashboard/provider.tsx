@@ -8,6 +8,7 @@ const DASHBOARD_ROUTES: DashboardRoute[] = [
   "/",
   "/exams",
   "/medications",
+  "/symptoms",
   "/profile",
   "/share",
 ];

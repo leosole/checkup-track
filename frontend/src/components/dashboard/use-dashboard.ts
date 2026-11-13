@@ -6,7 +6,13 @@ import {
 } from "react";
 import { notify } from "../ui/toast";
 import { api } from "../../api-client";
-import type { CalendarData, Exam, Medication, User } from "../../types";
+import type {
+  CalendarData,
+  Exam,
+  Medication,
+  SymptomOccurrence,
+  User,
+} from "../../types";
 import { applyTheme, initTheme, type Theme } from "../../theme";
 import {
   hasMarker,
@@ -33,6 +39,7 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
   const [calendar, set_calendar] = useState<CalendarData>({
     exams: [],
     medications: [],
+    symptoms: [],
   });
   const [search_query, set_search_query] = useState("");
   const [search_results, set_search_results] = useState<Exam[] | null>(null);
@@ -45,6 +52,9 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
   const [retry_error, _set_retry_error] = useState<string | null>(null);
   const [modal_open, set_modal_open] = useState(false);
   const [editing_med, set_editing_med] = useState<Medication | null>(null);
+  const [symptom_modal_open, set_symptom_modal_open] = useState(false);
+  const [editing_symptom, set_editing_symptom] =
+    useState<SymptomOccurrence | null>(null);
   const [upload_exam_open, set_upload_exam_open] = useState(false);
   const [renaming_id, set_renaming_id] = useState<number | null>(null);
   const [rename_value, set_rename_value] = useState("");
@@ -186,6 +196,15 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
     );
   }
 
+  function showCalendarSymptom(occurrence_id: number) {
+    const symptom = calendar.symptoms.find((item) => item.id === occurrence_id);
+    if (symptom) {
+      set_calendar_item_error(null);
+      _set_retry_error(null);
+      set_calendar_item({ kind: "symptom", symptom });
+    }
+  }
+
   function showCalendarMedication(medication_id: number) {
     const medication = medications.find((item) => item.id === medication_id);
     if (medication) {
@@ -231,11 +250,15 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
     const item_name =
       calendar_item.kind === "exam"
         ? calendar_item.exam.title
-        : calendar_item.medication.name;
+        : calendar_item.kind === "medication"
+          ? calendar_item.medication.name
+          : calendar_item.symptom.title;
     const confirmation =
       calendar_item.kind === "exam"
         ? `Delete "${item_name}" and its uploaded PDF? This cannot be undone.`
-        : `Delete "${item_name}"? This cannot be undone.`;
+        : calendar_item.kind === "symptom"
+          ? `Delete this "${item_name}" occurrence? This cannot be undone.`
+          : `Delete "${item_name}"? This cannot be undone.`;
     if (!window.confirm(confirmation)) return;
 
     set_calendar_action_busy(true);
@@ -249,7 +272,7 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
           ...current,
           exams: current.exams.filter((exam) => exam.id !== exam_id),
         }));
-      } else {
+      } else if (calendar_item.kind === "medication") {
         const medication_id = calendar_item.medication.id;
         await api.deleteMedication(medication_id);
         set_medications((current) =>
@@ -259,6 +282,15 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
           ...current,
           medications: current.medications.filter(
             (med) => med.id !== medication_id,
+          ),
+        }));
+      } else {
+        const occurrence_id = calendar_item.symptom.id;
+        await api.deleteSymptomOccurrence(occurrence_id);
+        set_calendar((current) => ({
+          ...current,
+          symptoms: current.symptoms.filter(
+            (item) => item.id !== occurrence_id,
           ),
         }));
       }
@@ -278,9 +310,12 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
     if (!calendar_item) return;
     if (calendar_item.kind === "exam") {
       set_rename_modal_exam(calendar_item.exam);
-    } else {
+    } else if (calendar_item.kind === "medication") {
       set_editing_med(calendar_item.medication);
       set_modal_open(true);
+    } else {
+      set_editing_symptom(calendar_item.symptom);
+      set_symptom_modal_open(true);
     }
     set_calendar_item(null);
   }
@@ -439,6 +474,10 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
     set_modal_open,
     editing_med,
     set_editing_med,
+    symptom_modal_open,
+    set_symptom_modal_open,
+    editing_symptom,
+    set_editing_symptom,
     upload_exam_open,
     set_upload_exam_open,
     renaming_id,
@@ -456,6 +495,7 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
     openExamPdf,
     showCalendarExam,
     showCalendarMedication,
+    showCalendarSymptom,
     toggleMarker,
     downloadExamFile,
     deleteCalendarItem,

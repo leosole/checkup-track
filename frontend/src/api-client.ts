@@ -17,6 +17,9 @@ import type {
   ShareCreated,
   ShareGroup,
   ShareInput,
+  SymptomCreateInput,
+  SymptomOccurrence,
+  SymptomOccurrenceUpdateInput,
   TimeSeriesQuery,
   TimeSeriesResponse,
   User,
@@ -270,6 +273,27 @@ export const api = {
 
   deleteMedication(id: number): Promise<{ deleted: number }> {
     return request(`/api/medications/${id}`, { method: "DELETE" });
+  },
+
+  createSymptom(input: SymptomCreateInput): Promise<SymptomOccurrence[]> {
+    return request("/api/symptoms", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateSymptomOccurrence(
+    id: number,
+    input: SymptomOccurrenceUpdateInput,
+  ): Promise<SymptomOccurrence> {
+    return request(`/api/symptoms/occurrences/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteSymptomOccurrence(id: number): Promise<{ deleted: number }> {
+    return request(`/api/symptoms/occurrences/${id}`, { method: "DELETE" });
   },
 
   calendar(): Promise<CalendarData> {

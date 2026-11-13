@@ -11,6 +11,7 @@ import { formatTimestamp } from "../components/guest/format";
 import { CodeEntry } from "../components/guest/code-entry";
 import { ExamsSection } from "../components/guest/exams-section";
 import { MedicationsSection } from "../components/guest/medications-section";
+import { SymptomsSection } from "../components/guest/symptoms-section";
 import { Logo } from "../components/logo";
 import { Badge, Spinner } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -193,6 +194,8 @@ function GuestPage() {
         </section>
 
         <MedicationsSection medications={data.medications} />
+
+        <SymptomsSection symptoms={data.symptoms} />
 
         <p className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
           This is a read-only view. Nothing you do here changes the owner&apos;s

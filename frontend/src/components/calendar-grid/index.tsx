@@ -14,20 +14,28 @@ import { Button } from "../ui/button";
 import {
   DEFAULT_EXAM_COLOR,
   barsForWeek,
-  medRowBounds,
+  medicationRanges,
+  rowBounds,
+  symptomRanges,
 } from "./bars";
+import { RangeLanes } from "./range-lanes";
 import type { CalendarGridProps } from "./types";
 
-export function CalendarGrid({
-  data,
-  onClick,
-}: CalendarGridProps) {
+export function CalendarGrid({ data, onClick }: CalendarGridProps) {
   const [cursor, set_cursor] = useState(() => startOfMonth(new Date()));
   const [show_exams, set_show_exams] = useState(true);
   const [show_medications, set_show_medications] = useState(true);
+  const [show_symptoms, set_show_symptoms] = useState(true);
 
   const exams_data = show_exams ? data.exams : [];
-  const medications_data = show_medications ? data.medications : [];
+  const med_items = useMemo(
+    () => (show_medications ? medicationRanges(data.medications) : []),
+    [show_medications, data.medications],
+  );
+  const symptom_items = useMemo(
+    () => (show_symptoms ? symptomRanges(data.symptoms) : []),
+    [show_symptoms, data.symptoms],
+  );
 
   const days = useMemo(() => monthGrid(cursor), [cursor]);
   const weeks = useMemo(() => {
@@ -39,8 +47,12 @@ export function CalendarGrid({
   }, [days]);
 
   const med_bounds = useMemo(
-    () => medRowBounds(medications_data, weeks),
-    [medications_data, weeks],
+    () => rowBounds(med_items, weeks),
+    [med_items, weeks],
+  );
+  const symptom_bounds = useMemo(
+    () => rowBounds(symptom_items, weeks),
+    [symptom_items, weeks],
   );
 
   const exams_by_day = useMemo(() => {
@@ -63,7 +75,7 @@ export function CalendarGrid({
             Health calendar
           </h3>
           <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-            Exam days and active medication windows in one timeline
+            Exams, medication windows and symptoms in one timeline
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -76,7 +88,7 @@ export function CalendarGrid({
             />
             Exams
           </label>
-          <label className="mr-2 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">
+          <label className="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">
             <input
               type="checkbox"
               checked={show_medications}
@@ -84,6 +96,15 @@ export function CalendarGrid({
               className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
             />
             Medications
+          </label>
+          <label className="mr-2 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={show_symptoms}
+              onChange={(event) => set_show_symptoms(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
+            />
+            Symptoms
           </label>
           <button
             type="button"
@@ -141,13 +162,18 @@ export function CalendarGrid({
 
         <div className="overflow-hidden rounded-lg ring-1 ring-gray-200 dark:ring-gray-800">
           {weeks.map((week, week_index) => {
-            const lanes = barsForWeek(
-              medications_data,
+            const med_lanes = barsForWeek(
+              med_items,
               week,
               week_index,
               med_bounds,
             );
-            const lane_height = 20;
+            const symptom_lanes = barsForWeek(
+              symptom_items,
+              week,
+              week_index,
+              symptom_bounds,
+            );
             return (
               <div
                 key={week_index}
@@ -186,7 +212,9 @@ export function CalendarGrid({
                             <button
                               key={exam.id}
                               type="button"
-                              onClick={() => onClick({ kind: "exam", id: exam.id })}
+                              onClick={() =>
+                                onClick({ kind: "exam", id: exam.id })
+                              }
                               title={`View details — ${exam.title}`}
                               className="flex w-full items-center gap-1 truncate text-left text-[10px] font-medium text-brand-700 hover:underline dark:text-brand-300"
                             >
@@ -206,46 +234,9 @@ export function CalendarGrid({
                   );
                 })}
 
-                {/* Medication range bars spanning exact active date boundaries */}
-                {lanes.length > 0 && (
-                  <div
-                    className="col-span-7 relative border-t border-dashed border-gray-200 bg-gray-50/60 dark:border-gray-800 dark:bg-gray-950/40"
-                    style={{ height: lanes.length * lane_height + 8 }}
-                  >
-                    {lanes.map((lane, lane_index) =>
-                      lane.map((bar) => (
-                        <button
-                          type="button"
-                          key={bar.id}
-                          onClick={() =>
-                            onClick({ kind: "medication", id: bar.medication_id })
-                          }
-                          title={bar.title}
-                          aria-label={`${bar.label}, medication details`}
-                          className="absolute flex h-4 items-center gap-1 overflow-hidden rounded-full px-1.5 text-[10px] font-semibold text-white shadow-sm"
-                          style={{
-                            backgroundColor: bar.color,
-                            top: lane_index * lane_height + 4,
-                            left: `calc(${(bar.start_col / 7) * 100}% + 3px)`,
-                            width: `calc(${(bar.span / 7) * 100}% - 6px)`,
-                          }}
-                        >
-                          {bar.starts_before_label && (
-                            <span className="shrink-0 tabular-nums">
-                              ‹ {bar.starts_before_label}
-                            </span>
-                          )}
-                          <span className="min-w-0 truncate">{bar.label}</span>
-                          {bar.ends_after_label && (
-                            <span className="ml-auto shrink-0 tabular-nums">
-                              {bar.ends_after_label} ›
-                            </span>
-                          )}
-                        </button>
-                      )),
-                    )}
-                  </div>
-                )}
+                {/* Range bars spanning exact active date boundaries */}
+                <RangeLanes lanes={med_lanes} on_select={onClick} />
+                <RangeLanes lanes={symptom_lanes} on_select={onClick} />
               </div>
             );
           })}

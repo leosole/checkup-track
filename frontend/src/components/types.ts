@@ -1,4 +1,4 @@
-import type { Exam, Medication } from "../types";
+import type { Exam, Medication, SymptomOccurrence } from "../types";
 
 export interface LogoProps {
   className?: string;
@@ -33,9 +33,20 @@ export interface BiomarkerDraft {
   is_abnormal: boolean;
 }
 
+export interface SymptomModalProps {
+  open: boolean;
+  /** Occurrence being edited; null means "log a new one". */
+  occurrence?: SymptomOccurrence | null;
+  /** Past symptom names offered by the combobox. */
+  titles: string[];
+  on_close: () => void;
+  on_saved: () => void;
+}
+
 export type CalendarSelection =
   | { kind: "exam"; exam: Exam }
-  | { kind: "medication"; medication: Medication };
+  | { kind: "medication"; medication: Medication }
+  | { kind: "symptom"; symptom: SymptomOccurrence };
 
 export interface CalendarItemModalProps {
   item: CalendarSelection | null;

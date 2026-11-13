@@ -75,6 +75,13 @@ export function DashboardHeader({
                 </button>
                 <button
                   type="button"
+                  onClick={() => void navigate({ to: "/symptoms" })}
+                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  Symptoms
+                </button>
+                <button
+                  type="button"
                   onClick={() => void navigate({ to: "/share" })}
                   className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
                 >

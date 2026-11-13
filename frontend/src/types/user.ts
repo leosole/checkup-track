@@ -3,6 +3,7 @@ export interface AccountCapabilities {
   delete_records: boolean;
   edit_exam_metadata: boolean;
   edit_medications: boolean;
+  edit_symptoms: boolean;
   edit_results: boolean;
   manage_providers: boolean;
   create_shares: boolean;

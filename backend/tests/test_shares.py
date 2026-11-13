@@ -17,6 +17,8 @@ from models import (
     Medication,
     ShareCreate,
     ShareGrant,
+    Symptom,
+    SymptomOccurrence,
     User,
 )
 
@@ -74,6 +76,36 @@ class ShareTests(unittest.TestCase):
             frequency_per_day=1,
             start_date=date(2026, 3, 1),
         )
+        self.symptom = Symptom(user_id=self.user.id, title="Headache")
+        self.other_symptom = Symptom(user_id=self.other_user.id, title="Cramp")
+        self.session.add_all([self.symptom, self.other_symptom])
+        self.session.commit()
+        self.session.refresh(self.symptom)
+        self.session.refresh(self.other_symptom)
+        self.occurrence_a = SymptomOccurrence(
+            symptom_id=self.symptom.id,
+            observation="morning",
+            start_date=date(2026, 1, 2),
+        )
+        self.occurrence_b = SymptomOccurrence(
+            symptom_id=self.symptom.id,
+            start_date=date(2026, 1, 5),
+            end_date=date(2026, 1, 7),
+        )
+        self.other_occurrence = SymptomOccurrence(
+            symptom_id=self.other_symptom.id,
+            start_date=date(2026, 1, 9),
+        )
+        self.session.add_all(
+            [self.occurrence_a, self.occurrence_b, self.other_occurrence]
+        )
+        self.session.commit()
+        for occurrence in (
+            self.occurrence_a,
+            self.occurrence_b,
+            self.other_occurrence,
+        ):
+            self.session.refresh(occurrence)
         rows = [
             self.user,
             self.other_user,
@@ -95,11 +127,18 @@ class ShareTests(unittest.TestCase):
         self.addCleanup(self.engine.dispose)
         self.addCleanup(self.session.close)
 
-    def create(self, exam_ids=(), medication_ids=(), user=None):
+    def create(
+        self,
+        exam_ids=(),
+        medication_ids=(),
+        symptom_occurrence_ids=(),
+        user=None,
+    ):
         return main.create_share(
             ShareCreate(
                 exam_ids=list(exam_ids),
                 medication_ids=list(medication_ids),
+                symptom_occurrence_ids=list(symptom_occurrence_ids),
             ),
             user or self.user,
             self.session,
@@ -280,6 +319,54 @@ class ShareTests(unittest.TestCase):
         groups = main.list_share_groups(self.user, self.session)
         self.assertEqual(groups[0].codes[0].status, "revoked")
         self.assertEqual(groups[0].active_codes, 0)
+
+    def test_guest_sees_only_selected_symptom_occurrences_nested(self) -> None:
+        created = self.create(symptom_occurrence_ids=[self.occurrence_a.id])
+        assert created.share.code is not None
+        guest = main.redeem_share_code(
+            GuestCodeRequest(code=created.share.code), self.session
+        )
+        share = auth.get_guest_share(
+            self.guest_credentials(guest.access_token), self.session
+        )
+
+        data = main.guest_shared_data(share, self.session)
+
+        self.assertEqual(len(data.symptoms), 1)
+        symptom = data.symptoms[0]
+        self.assertEqual(symptom.title, "Headache")
+        self.assertEqual(
+            [occurrence.id for occurrence in symptom.occurrences],
+            [self.occurrence_a.id],
+        )
+        self.assertEqual(symptom.occurrences[0].observation, "morning")
+        self.assertEqual(data.share.symptom_count, 1)
+
+    def test_cannot_share_another_users_symptom(self) -> None:
+        with self.assertRaises(HTTPException) as raised:
+            self.create(symptom_occurrence_ids=[self.other_occurrence.id])
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_symptom_occurrences_group_into_share_groups(self) -> None:
+        occurrence_ids = [self.occurrence_a.id, self.occurrence_b.id]
+        first = self.create(symptom_occurrence_ids=occurrence_ids)
+        second = self.create(symptom_occurrence_ids=occurrence_ids)
+
+        self.assertEqual(first.group_key, second.group_key)
+        groups = main.list_share_groups(self.user, self.session)
+        repeated = next(
+            group for group in groups if group.group_key == first.group_key
+        )
+        self.assertEqual(repeated.symptom_occurrence_ids, occurrence_ids)
+        self.assertEqual([item.title for item in repeated.symptoms], ["Headache"])
+        self.assertEqual(len(repeated.symptoms[0].occurrences), 2)
+
+    def test_deleting_an_occurrence_drops_it_from_share_groups(self) -> None:
+        self.create(symptom_occurrence_ids=[self.occurrence_a.id])
+
+        main.delete_symptom_occurrence(self.occurrence_a.id, self.user, self.session)
+
+        self.assertEqual(main.list_share_groups(self.user, self.session), [])
 
     def test_other_users_cannot_revoke_a_share(self) -> None:
         created = self.create([self.exam_a.id])

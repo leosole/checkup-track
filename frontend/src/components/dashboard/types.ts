@@ -7,6 +7,7 @@ export type DashboardRoute =
   | "/"
   | "/exams"
   | "/medications"
+  | "/symptoms"
   | "/profile"
   | "/share";
 

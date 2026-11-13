@@ -17,6 +17,7 @@ from models import (
     ShareExam,
     ShareGrant,
     ShareMedication,
+    ShareSymptom,
     User,
     UserResponse,
 )
@@ -42,6 +43,7 @@ def account_capabilities(user: User) -> AccountCapabilities:
         create_records=False,
         delete_records=False,
         edit_results=False,
+        edit_symptoms=False,
         manage_providers=False,
         revoke_shares=False,
         retry_extraction=False,
@@ -138,6 +140,7 @@ def prepare_test_share(session: Session, user: User, now: datetime) -> None:
     )
     session.exec(delete(ShareExam).where(ShareExam.share_id.in_(expired_ids)))
     session.exec(delete(ShareMedication).where(ShareMedication.share_id.in_(expired_ids)))
+    session.exec(delete(ShareSymptom).where(ShareSymptom.share_id.in_(expired_ids)))
     session.exec(delete(ShareGrant).where(
         ShareGrant.owner_id == user.id, ShareGrant.expires_at <= now
     ))

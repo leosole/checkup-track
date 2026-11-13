@@ -7,12 +7,14 @@ import { useDashboardState } from "../components/dashboard/provider";
 import { CreatedCode } from "../components/share/created-code";
 import { GroupList } from "../components/share/group-list";
 import { SelectionCard } from "../components/share/selection-card";
+import { SymptomSelectionCard } from "../components/share/symptom-selection-card";
 import {
   EXPIRY_OPTIONS,
   SELECT_CLASS,
   plural,
 } from "../components/share/share-utils";
 import type { CopyTarget, SelectionItem } from "../components/share/types";
+import { groupSymptoms } from "../components/symptoms/utils";
 import { Card } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import type { ShareCreated, ShareGroup } from "../types";
@@ -27,6 +29,9 @@ function SharePage() {
   const [selected_medications, set_selected_medications] = useState<
     Set<number>
   >(new Set());
+  const [selected_symptoms, set_selected_symptoms] = useState<Set<number>>(
+    new Set(),
+  );
   const [expires_in_days, set_expires_in_days] = useState(7);
   const [groups, set_groups] = useState<ShareGroup[]>([]);
   const [loading_groups, set_loading_groups] = useState(true);
@@ -77,7 +82,22 @@ function SharePage() {
     });
   }, [medications]);
 
-  const has_selection = selected_exams.size > 0 || selected_medications.size > 0;
+  useEffect(() => {
+    const available = new Set(
+      dash.calendar.symptoms.map((symptom) => symptom.id),
+    );
+    set_selected_symptoms((current) => {
+      const next = new Set([...current].filter((id) => available.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [dash.calendar.symptoms]);
+
+  const symptom_groups = groupSymptoms(dash.calendar.symptoms);
+
+  const has_selection =
+    selected_exams.size > 0 ||
+    selected_medications.size > 0 ||
+    selected_symptoms.size > 0;
   const all_exams_selected =
     exams.length > 0 && selected_exams.size === exams.length;
   const all_medications_selected =
@@ -123,6 +143,21 @@ function SharePage() {
     );
   }
 
+  function toggleSymptom(occurrence_id: number) {
+    toggleSelection(set_selected_symptoms, occurrence_id);
+  }
+
+  function toggleSymptomGroup(occurrence_ids: number[], all_selected: boolean) {
+    set_selected_symptoms((current) => {
+      const next = new Set(current);
+      for (const id of occurrence_ids) {
+        if (all_selected) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  }
+
   async function createShare() {
     if (!has_selection) return;
     set_creating(true);
@@ -131,6 +166,7 @@ function SharePage() {
       const result = await api.createShare({
         exam_ids: [...selected_exams],
         medication_ids: [...selected_medications],
+        symptom_occurrence_ids: [...selected_symptoms],
         expires_in_days,
       });
       set_created(result);
@@ -151,6 +187,7 @@ function SharePage() {
       const result = await api.createShare({
         exam_ids: group.exam_ids,
         medication_ids: group.medication_ids,
+        symptom_occurrence_ids: group.symptom_occurrence_ids,
         expires_in_days,
       });
       set_created(result);
@@ -228,8 +265,8 @@ function SharePage() {
             Share your records
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Pick the exams and medications to share, then send the one-time
-            code.
+            Pick the exams, medications and symptoms to share, then send the
+            one-time code.
           </p>
         </div>
       </div>
@@ -273,6 +310,12 @@ function SharePage() {
           on_toggle={(id) => toggleSelection(set_selected_medications, id)}
           on_toggle_all={toggleAllMedications}
         />
+        <SymptomSelectionCard
+          symptoms={symptom_groups}
+          selected={selected_symptoms}
+          on_toggle={toggleSymptom}
+          on_toggle_group={toggleSymptomGroup}
+        />
       </div>
 
       <Card className="mt-4 flex flex-wrap items-end gap-3 p-4">
@@ -301,7 +344,7 @@ function SharePage() {
         </Button>
         <p className="pb-1 text-xs text-gray-500 dark:text-gray-400">
           A code can be redeemed once and only allows viewing the selected
-          records.
+          records, including individual symptom occurrences.
         </p>
       </Card>
 

@@ -25,12 +25,26 @@ export interface SharedMedicationSummary {
   dosage: string;
 }
 
+export interface SharedSymptomOccurrence {
+  id: number;
+  start_date: string;
+  end_date: string | null;
+}
+
+export interface SharedSymptom {
+  id: number;
+  title: string;
+  occurrences: SharedSymptomOccurrence[];
+}
+
 export interface ShareGroup {
   group_key: string;
   exam_ids: number[];
   medication_ids: number[];
+  symptom_occurrence_ids: number[];
   exams: SharedExamSummary[];
   medications: SharedMedicationSummary[];
+  symptoms: SharedSymptom[];
   times_shared: number;
   last_shared_at: string;
   active_codes: number;
@@ -45,6 +59,7 @@ export interface ShareCreated {
 export interface ShareInput {
   exam_ids: number[];
   medication_ids: number[];
+  symptom_occurrence_ids?: number[];
   expires_in_days?: number;
 }
 
@@ -53,6 +68,7 @@ export interface GuestShareInfo {
   expires_at: string;
   exam_count: number;
   medication_count: number;
+  symptom_count: number;
 }
 
 export interface GuestExam {
@@ -62,10 +78,24 @@ export interface GuestExam {
   biomarkers: Biomarker[];
 }
 
+export interface GuestSymptomOccurrence {
+  id: number;
+  observation: string | null;
+  start_date: string;
+  end_date: string | null;
+}
+
+export interface GuestSymptom {
+  id: number;
+  title: string;
+  occurrences: GuestSymptomOccurrence[];
+}
+
 export interface GuestShareData {
   share: GuestShareInfo;
   exams: GuestExam[];
   medications: Medication[];
+  symptoms: GuestSymptom[];
 }
 
 export interface GuestAuthResponse {

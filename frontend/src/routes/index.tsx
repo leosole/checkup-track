@@ -4,6 +4,7 @@ import { AnalyticsChart } from "../components/analytics-chart";
 import { CalendarGrid } from "../components/calendar-grid";
 import { DashboardExamList } from "../components/dashboard/exam-list";
 import { DashboardMedicationSummary } from "../components/dashboard/medication-summary";
+import { DashboardSymptomSummary } from "../components/dashboard/symptom-summary";
 import { useDashboardState } from "../components/dashboard/provider";
 import { StatCard } from "../components/dashboard/stat-card";
 import { Button } from "../components/ui/button";
@@ -41,6 +42,16 @@ function DashboardPage() {
           }}
         >
           Add medication
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={!user?.capabilities.create_records}
+          onClick={() => {
+            dash.set_editing_symptom(null);
+            dash.set_symptom_modal_open(true);
+          }}
+        >
+          Log symptom
         </Button>
         <Button variant="secondary" onClick={() => void navigate({ to: "/share" })}>
           Share data
@@ -85,8 +96,10 @@ function DashboardPage() {
           onClick={(item) => {
             if (item.kind === "exam") {
               dash.showCalendarExam(item.id);
-            } else {
+            } else if (item.kind === "medication") {
               dash.showCalendarMedication(item.id);
+            } else {
+              dash.showCalendarSymptom(item.id);
             }
           }}
         />
@@ -104,6 +117,8 @@ function DashboardPage() {
       <DashboardExamList />
 
       <DashboardMedicationSummary />
+
+      <DashboardSymptomSummary />
     </main>
   );
 }

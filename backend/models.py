@@ -92,6 +92,28 @@ class Medication(SQLModel, table=True):
     color: Optional[str] = None
 
 
+class Symptom(SQLModel, table=True):
+    """A reusable symptom name; its dated episodes hang off it."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(foreign_key="user.id", index=True)
+    title: str
+
+
+class SymptomOccurrence(SQLModel, table=True):
+    """One dated episode of a symptom, with its own observation.
+
+    ``end_date is None`` means the symptom is ongoing; an end date equal to
+    the start date is a single day.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symptom_id: int = Field(foreign_key="symptom.id", index=True)
+    observation: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
+
+
 class ShareGrant(SQLModel, table=True):
     """A single-use code that grants read-only access to selected records.
 
@@ -117,6 +139,13 @@ class ShareExam(SQLModel, table=True):
 class ShareMedication(SQLModel, table=True):
     share_id: int = Field(foreign_key="sharegrant.id", primary_key=True)
     medication_id: int = Field(foreign_key="medication.id", primary_key=True)
+
+
+class ShareSymptom(SQLModel, table=True):
+    """One shared symptom occurrence (individual occurrences are selectable)."""
+
+    share_id: int = Field(foreign_key="sharegrant.id", primary_key=True)
+    occurrence_id: int = Field(foreign_key="symptomoccurrence.id", primary_key=True)
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +174,7 @@ class AccountCapabilities(BaseModel):
     delete_records: bool = True
     edit_exam_metadata: bool = True
     edit_medications: bool = True
+    edit_symptoms: bool = True
     edit_results: bool = True
     manage_providers: bool = True
     create_shares: bool = True
@@ -281,6 +311,74 @@ class MedicationUpdate(BaseModel):
         return _normalize_color(value)
 
 
+class SymptomDateInput(BaseModel):
+    """One dated occurrence inside a symptom's date list."""
+
+    start_date: date
+    end_date: Optional[date] = None
+    observation: Optional[str] = PydanticField(default=None, max_length=2000)
+
+    @field_validator("observation")
+    @classmethod
+    def trim_observation(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
+class SymptomCreate(BaseModel):
+    title: str = PydanticField(min_length=1, max_length=200)
+    dates: List[SymptomDateInput] = PydanticField(min_length=1, max_length=50)
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Symptom title must not be blank.")
+        return value
+
+
+class SymptomOccurrenceUpdate(BaseModel):
+    """Partial update of one occurrence.
+
+    A ``title`` renames the parent symptom (merging into an existing symptom of
+    that name). An explicit ``observation: null`` clears the note and an
+    explicit ``end_date: null`` makes the occurrence ongoing.
+    """
+
+    title: Optional[str] = PydanticField(default=None, min_length=1, max_length=200)
+    observation: Optional[str] = PydanticField(default=None, max_length=2000)
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("Symptom title must not be blank.")
+        return value
+
+    @field_validator("observation")
+    @classmethod
+    def trim_observation(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
+class SymptomOccurrenceResponse(BaseModel):
+    id: int
+    symptom_id: int
+    title: str
+    observation: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
+
+
 class ExamUpdate(BaseModel):
     """Partial exam update: omitted fields keep their current value."""
 
@@ -361,9 +459,19 @@ class CalendarMedication(BaseModel):
     color: Optional[str] = None
 
 
+class CalendarSymptom(BaseModel):
+    id: int
+    symptom_id: int
+    title: str
+    observation: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
+
+
 class CalendarResponse(BaseModel):
     exams: List[CalendarExam] = []
     medications: List[CalendarMedication] = []
+    symptoms: List[CalendarSymptom] = []
 
 
 class TimeSeriesPoint(BaseModel):
@@ -394,9 +502,12 @@ class ShareCreate(BaseModel):
 
     exam_ids: List[int] = PydanticField(default_factory=list, max_length=500)
     medication_ids: List[int] = PydanticField(default_factory=list, max_length=500)
+    symptom_occurrence_ids: List[int] = PydanticField(
+        default_factory=list, max_length=500
+    )
     expires_in_days: int = PydanticField(default=7, ge=1, le=30)
 
-    @field_validator("exam_ids", "medication_ids")
+    @field_validator("exam_ids", "medication_ids", "symptom_occurrence_ids")
     @classmethod
     def ids_must_be_positive(cls, value: List[int]) -> List[int]:
         if any(item < 1 for item in value):
@@ -427,14 +538,30 @@ class SharedMedicationSummary(BaseModel):
     dosage: str
 
 
+class SharedSymptomOccurrenceSummary(BaseModel):
+    id: int
+    start_date: date
+    end_date: Optional[date] = None
+
+
+class SharedSymptomSummary(BaseModel):
+    """A shared symptom name with only the occurrences that were selected."""
+
+    id: int
+    title: str
+    occurrences: List[SharedSymptomOccurrenceSummary] = []
+
+
 class ShareGroupResponse(BaseModel):
     """Every code ever issued for one exact selection of records."""
 
     group_key: str
     exam_ids: List[int] = []
     medication_ids: List[int] = []
+    symptom_occurrence_ids: List[int] = []
     exams: List[SharedExamSummary] = []
     medications: List[SharedMedicationSummary] = []
+    symptoms: List[SharedSymptomSummary] = []
     times_shared: int
     last_shared_at: datetime
     active_codes: int
@@ -451,6 +578,7 @@ class GuestShareInfo(BaseModel):
     expires_at: datetime
     exam_count: int
     medication_count: int
+    symptom_count: int = 0
 
 
 class GuestExamResponse(BaseModel):
@@ -462,10 +590,26 @@ class GuestExamResponse(BaseModel):
     biomarkers: List[BiomarkerResponse] = []
 
 
+class GuestSymptomOccurrenceResponse(BaseModel):
+    id: int
+    observation: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
+
+
+class GuestSymptomResponse(BaseModel):
+    """Guest-facing symptom: the title with its shared occurrences nested."""
+
+    id: int
+    title: str
+    occurrences: List[GuestSymptomOccurrenceResponse] = []
+
+
 class GuestShareData(BaseModel):
     share: GuestShareInfo
     exams: List[GuestExamResponse] = []
     medications: List[MedicationResponse] = []
+    symptoms: List[GuestSymptomResponse] = []
 
 
 class GuestCodeRequest(BaseModel):

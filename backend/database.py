@@ -103,6 +103,9 @@ def init_db() -> None:
         ShareExam,
         ShareGrant,
         ShareMedication,
+        ShareSymptom,
+        Symptom,
+        SymptomOccurrence,
         User,
         UserProviderCredential,
     )

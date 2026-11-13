@@ -29,7 +29,15 @@ export function CalendarItemModal({
       ? item.exam.title
       : item?.kind === "medication"
         ? item.medication.name
-        : "Calendar item";
+        : item?.kind === "symptom"
+          ? item.symptom.title
+          : "Calendar item";
+  const subtitle =
+    item?.kind === "exam"
+      ? "Exam details"
+      : item?.kind === "medication"
+        ? "Medication details"
+        : "Symptom details";
   const medication_is_active =
     item?.kind === "medication" &&
     item.medication.start_date <= new Date().toISOString().slice(0, 10) &&
@@ -40,7 +48,7 @@ export function CalendarItemModal({
     <Modal
       open={item !== null}
       title={title}
-      subtitle={is_exam ? "Exam details" : "Medication details"}
+      subtitle={subtitle}
       onClose={on_close}
       footer={
         item && (
@@ -262,6 +270,29 @@ export function CalendarItemModal({
               {item.medication.end_date
                 ? formatDate(item.medication.end_date)
                 : "Ongoing"}
+            </dd>
+          </div>
+        </dl>
+      ) : item?.kind === "symptom" ? (
+        <dl className="grid grid-cols-2 gap-4 text-sm">
+          <div className="col-span-2">
+            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              Dates
+            </dt>
+            <dd className="mt-1 text-gray-900 dark:text-white">
+              {item.symptom.end_date === null
+                ? `${formatDate(item.symptom.start_date)} — Ongoing`
+                : item.symptom.end_date === item.symptom.start_date
+                  ? formatDate(item.symptom.start_date)
+                  : `${formatDate(item.symptom.start_date)} — ${formatDate(item.symptom.end_date)}`}
+            </dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              Observation
+            </dt>
+            <dd className="mt-1 whitespace-pre-line text-gray-900 dark:text-white">
+              {item.symptom.observation || "No observation for this occurrence."}
             </dd>
           </div>
         </dl>

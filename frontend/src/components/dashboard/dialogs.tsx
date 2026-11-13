@@ -3,6 +3,8 @@ import { CalendarItemModal } from "../calendar-item-modal";
 import { ExamRenameModal } from "../exam-rename-modal";
 import { ManualExamModal } from "../manual-exam-modal";
 import { MedicationModal } from "../medication-modal";
+import { SymptomModal } from "../symptom-modal";
+import { symptomTitles } from "../symptom-modal/utils";
 import { UploadExamModal } from "../upload-exam-modal";
 import type { DashboardDialogsProps } from "./types";
 
@@ -36,6 +38,19 @@ export function DashboardDialogs({
         onClose={() => {
           dash.set_modal_open(false);
           dash.set_editing_med(null);
+        }}
+        on_saved={() => void dash.refresh()}
+      />
+      <SymptomModal
+        open={
+          dash.symptom_modal_open &&
+          (dash.editing_symptom !== null || can_create_records)
+        }
+        occurrence={dash.editing_symptom}
+        titles={symptomTitles(dash.calendar.symptoms)}
+        on_close={() => {
+          dash.set_symptom_modal_open(false);
+          dash.set_editing_symptom(null);
         }}
         on_saved={() => void dash.refresh()}
       />

@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import type { GuestExam, Medication } from "../../types";
+import type { GuestExam, GuestSymptom, Medication } from "../../types";
 
 export interface CodeEntryProps {
   code: string;
@@ -18,4 +18,8 @@ export interface ExamsSectionProps {
 
 export interface MedicationsSectionProps {
   medications: Medication[];
+}
+
+export interface SymptomsSectionProps {
+  symptoms: GuestSymptom[];
 }

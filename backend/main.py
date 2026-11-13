@@ -26,7 +26,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import update
+from sqlalchemy import func, update
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import FileResponse
@@ -56,6 +56,7 @@ from models import (
     CalendarExam,
     CalendarMedication,
     CalendarResponse,
+    CalendarSymptom,
     Exam,
     ExamBiomarker,
     ExamProcessingJob,
@@ -68,6 +69,8 @@ from models import (
     GuestExamResponse,
     GuestShareData,
     GuestShareInfo,
+    GuestSymptomOccurrenceResponse,
+    GuestSymptomResponse,
     HealthResponse,
     LLMProvider,
     ManualExamInput,
@@ -85,8 +88,16 @@ from models import (
     ShareGrant,
     ShareGroupResponse,
     ShareMedication,
+    ShareSymptom,
     SharedExamSummary,
     SharedMedicationSummary,
+    SharedSymptomOccurrenceSummary,
+    SharedSymptomSummary,
+    Symptom,
+    SymptomCreate,
+    SymptomOccurrence,
+    SymptomOccurrenceResponse,
+    SymptomOccurrenceUpdate,
     TimeSeries,
     TimeSeriesPoint,
     TimeSeriesResponse,
@@ -783,6 +794,170 @@ def delete_medication(
 
 
 # ---------------------------------------------------------------------------
+# Symptoms: a reusable title plus dated occurrences
+# ---------------------------------------------------------------------------
+
+
+def _symptom_occurrence_response(
+    occurrence: SymptomOccurrence, symptom: Symptom
+) -> SymptomOccurrenceResponse:
+    return SymptomOccurrenceResponse(
+        id=occurrence.id,
+        symptom_id=symptom.id,
+        title=symptom.title,
+        observation=occurrence.observation,
+        start_date=occurrence.start_date,
+        end_date=occurrence.end_date,
+    )
+
+
+def _symptom_by_title(
+    session: Session, user_id: str, title: str
+) -> Optional[Symptom]:
+    """Case-insensitive lookup of one of the user's symptom names."""
+    return session.exec(
+        select(Symptom).where(
+            Symptom.user_id == user_id,
+            func.lower(Symptom.title) == title.lower(),
+        )
+    ).first()
+
+
+def _check_symptom_range(start_date: date, end_date: Optional[date]) -> None:
+    if end_date is not None and end_date < start_date:
+        raise HTTPException(
+            status_code=422,
+            detail="end_date must be on or after start_date.",
+        )
+
+
+@app.post(
+    "/api/symptoms",
+    response_model=List[SymptomOccurrenceResponse],
+    tags=["symptoms"],
+)
+def create_symptoms(
+    payload: SymptomCreate,
+    user: User = Depends(require_capability("create_records")),
+    session: Session = Depends(get_session),
+) -> List[SymptomOccurrenceResponse]:
+    """Log one occurrence per date entry under a reused or new symptom title."""
+    for entry in payload.dates:
+        _check_symptom_range(entry.start_date, entry.end_date)
+
+    title = payload.title.strip()
+    symptom = _symptom_by_title(session, user.id, title)
+    if symptom is None:
+        symptom = Symptom(user_id=user.id, title=title)
+        session.add(symptom)
+        session.flush()
+
+    occurrences = [
+        SymptomOccurrence(
+            symptom_id=symptom.id,
+            observation=entry.observation,
+            start_date=entry.start_date,
+            end_date=entry.end_date,
+        )
+        for entry in payload.dates
+    ]
+    session.add_all(occurrences)
+    session.commit()
+    for occurrence in occurrences:
+        session.refresh(occurrence)
+    session.refresh(symptom)
+    return [
+        _symptom_occurrence_response(occurrence, symptom)
+        for occurrence in occurrences
+    ]
+
+
+@app.patch(
+    "/api/symptoms/occurrences/{occurrence_id}",
+    response_model=SymptomOccurrenceResponse,
+    tags=["symptoms"],
+)
+def update_symptom_occurrence(
+    occurrence_id: int,
+    payload: SymptomOccurrenceUpdate,
+    user: User = Depends(require_capability("edit_symptoms")),
+    session: Session = Depends(get_session),
+) -> SymptomOccurrenceResponse:
+    """Edit one occurrence; a new title renames its parent symptom."""
+    occurrence = session.get(SymptomOccurrence, occurrence_id)
+    symptom = (
+        session.get(Symptom, occurrence.symptom_id) if occurrence is not None else None
+    )
+    if occurrence is None or symptom is None or symptom.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Symptom occurrence not found.")
+
+    provided = payload.model_fields_set
+    if "title" in provided and payload.title is not None:
+        requested = payload.title.strip()
+        if requested.lower() != symptom.title.lower():
+            existing = _symptom_by_title(session, user.id, requested)
+            if existing is not None and existing.id != symptom.id:
+                # Merge this occurrence into the symptom that already has the
+                # name, then drop the old symptom if it has nothing left.
+                previous = symptom
+                occurrence.symptom_id = existing.id
+                session.add(occurrence)
+                session.flush()
+                remaining = session.exec(
+                    select(SymptomOccurrence).where(
+                        SymptomOccurrence.symptom_id == previous.id
+                    )
+                ).first()
+                if remaining is None:
+                    session.delete(previous)
+                symptom = existing
+            else:
+                symptom.title = requested
+    if "observation" in provided:
+        occurrence.observation = payload.observation
+    if "start_date" in provided and payload.start_date is not None:
+        occurrence.start_date = payload.start_date
+    if "end_date" in provided:
+        occurrence.end_date = payload.end_date
+    _check_symptom_range(occurrence.start_date, occurrence.end_date)
+
+    session.add(occurrence)
+    session.commit()
+    session.refresh(occurrence)
+    session.refresh(symptom)
+    return _symptom_occurrence_response(occurrence, symptom)
+
+
+@app.delete("/api/symptoms/occurrences/{occurrence_id}", tags=["symptoms"])
+def delete_symptom_occurrence(
+    occurrence_id: int,
+    user: User = Depends(require_capability("delete_records")),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Remove one occurrence, and the symptom name once nothing uses it."""
+    occurrence = session.get(SymptomOccurrence, occurrence_id)
+    symptom = (
+        session.get(Symptom, occurrence.symptom_id) if occurrence is not None else None
+    )
+    if occurrence is None or symptom is None or symptom.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Symptom occurrence not found.")
+
+    # Share links point at occurrences, so they go first.
+    session.exec(
+        delete(ShareSymptom).where(ShareSymptom.occurrence_id == occurrence.id)
+    )
+    session.delete(occurrence)
+    session.flush()
+    remaining = session.exec(
+        select(SymptomOccurrence).where(SymptomOccurrence.symptom_id == symptom.id)
+    ).first()
+    if remaining is None:
+        session.delete(symptom)
+    session.commit()
+    return {"deleted": occurrence_id}
+
+
+# ---------------------------------------------------------------------------
 # Calendar
 # ---------------------------------------------------------------------------
 
@@ -797,6 +972,12 @@ def calendar(
     ).all()
     meds = session.exec(
         select(Medication).where(Medication.user_id == user.id).order_by(Medication.start_date)
+    ).all()
+    symptom_rows = session.exec(
+        select(SymptomOccurrence, Symptom)
+        .join(Symptom, SymptomOccurrence.symptom_id == Symptom.id)
+        .where(Symptom.user_id == user.id)
+        .order_by(SymptomOccurrence.start_date, Symptom.title)
     ).all()
     return CalendarResponse(
         exams=[
@@ -817,6 +998,17 @@ def calendar(
                 color=m.color,
             )
             for m in meds
+        ],
+        symptoms=[
+            CalendarSymptom(
+                id=occurrence.id,
+                symptom_id=symptom.id,
+                title=symptom.title,
+                observation=occurrence.observation,
+                start_date=occurrence.start_date,
+                end_date=occurrence.end_date,
+            )
+            for occurrence, symptom in symptom_rows
         ],
     )
 
@@ -951,18 +1143,26 @@ def _share_code_response(
     )
 
 
-def _share_group_key(exam_ids: List[int], medication_ids: List[int]) -> str:
+def _share_group_key(
+    exam_ids: List[int],
+    medication_ids: List[int],
+    symptom_occurrence_ids: List[int] = [],
+) -> str:
     """Stable identity of a selection, so identical re-shares group together."""
     exams = ",".join(str(item) for item in sorted(exam_ids))
     medications = ",".join(str(item) for item in sorted(medication_ids))
-    return f"exams={exams};medications={medications}"
+    key = f"exams={exams};medications={medications}"
+    if symptom_occurrence_ids:
+        symptoms = ",".join(str(item) for item in sorted(symptom_occurrence_ids))
+        key += f";symptoms={symptoms}"
+    return key
 
 
 def _share_selection(
     session: Session,
     shares: List[ShareGrant],
-) -> Dict[int, Tuple[List[int], List[int]]]:
-    """Map each share id to the exam and medication ids recorded on it."""
+) -> Dict[int, Tuple[List[int], List[int], List[int]]]:
+    """Map each share id to its exam, medication and symptom occurrence ids."""
     if not shares:
         return {}
     share_ids = [share.id for share in shares]
@@ -972,31 +1172,66 @@ def _share_selection(
     medication_rows = session.exec(
         select(ShareMedication).where(ShareMedication.share_id.in_(share_ids))
     ).all()
+    symptom_rows = session.exec(
+        select(ShareSymptom).where(ShareSymptom.share_id.in_(share_ids))
+    ).all()
     exam_ids: Dict[int, List[int]] = {}
     medication_ids: Dict[int, List[int]] = {}
+    occurrence_ids: Dict[int, List[int]] = {}
     for row in exam_rows:
         exam_ids.setdefault(row.share_id, []).append(row.exam_id)
     for row in medication_rows:
         medication_ids.setdefault(row.share_id, []).append(row.medication_id)
+    for row in symptom_rows:
+        occurrence_ids.setdefault(row.share_id, []).append(row.occurrence_id)
     return {
         share.id: (
             sorted(exam_ids.get(share.id, [])),
             sorted(medication_ids.get(share.id, [])),
+            sorted(occurrence_ids.get(share.id, [])),
         )
         for share in shares
     }
 
 
+def _shared_symptoms(
+    occurrence_ids: List[int],
+    occurrences_by_id: Dict[int, Tuple[SymptomOccurrence, Symptom]],
+) -> List[SharedSymptomSummary]:
+    """Group selected occurrences under their symptom titles."""
+    grouped: Dict[int, SharedSymptomSummary] = {}
+    for occurrence_id in occurrence_ids:
+        entry = occurrences_by_id.get(occurrence_id)
+        if entry is None:
+            continue
+        occurrence, symptom = entry
+        summary = grouped.get(symptom.id)
+        if summary is None:
+            summary = SharedSymptomSummary(id=symptom.id, title=symptom.title)
+            grouped[symptom.id] = summary
+        summary.occurrences.append(
+            SharedSymptomOccurrenceSummary(
+                id=occurrence.id,
+                start_date=occurrence.start_date,
+                end_date=occurrence.end_date,
+            )
+        )
+    for summary in grouped.values():
+        summary.occurrences.sort(key=lambda item: item.start_date)
+    return sorted(grouped.values(), key=lambda item: item.title.lower())
+
+
 def _guest_share_info(session: Session, share: ShareGrant) -> GuestShareInfo:
     owner = session.get(User, share.owner_id)
-    exam_ids, medication_ids = _share_selection(session, [share]).get(
-        share.id, ([], [])
+    exam_ids, medication_ids, symptom_ids = _share_selection(session, [share]).get(
+        share.id, ([], [], [])
     )
     return GuestShareInfo(
         owner_name=owner.name if owner else "the record owner",
         expires_at=as_utc(share.expires_at),
         exam_count=len(exam_ids),
         medication_count=len(medication_ids),
+        symptom_count=len(symptom_ids),
     )
 
 
@@ -1017,10 +1252,11 @@ def create_share(
     """
     exam_ids = sorted(set(payload.exam_ids))
     medication_ids = sorted(set(payload.medication_ids))
-    if not exam_ids and not medication_ids:
+    symptom_occurrence_ids = sorted(set(payload.symptom_occurrence_ids))
+    if not exam_ids and not medication_ids and not symptom_occurrence_ids:
         raise HTTPException(
             status_code=422,
-            detail="Select at least one exam or medication to share.",
+            detail="Select at least one exam, medication or symptom to share.",
         )
 
     if exam_ids:
@@ -1042,6 +1278,20 @@ def create_share(
             raise HTTPException(
                 status_code=404,
                 detail="Some of the selected medications were not found.",
+            )
+    if symptom_occurrence_ids:
+        owned_occurrences = session.exec(
+            select(SymptomOccurrence.id)
+            .join(Symptom, SymptomOccurrence.symptom_id == Symptom.id)
+            .where(
+                Symptom.user_id == user.id,
+                SymptomOccurrence.id.in_(symptom_occurrence_ids),
+            )
+        ).all()
+        if sorted(owned_occurrences) != symptom_occurrence_ids:
+            raise HTTPException(
+                status_code=404,
+                detail="Some of the selected symptoms were not found.",
             )
 
     now = _utcnow()
@@ -1076,16 +1326,21 @@ def create_share(
         session.add(ShareExam(share_id=share.id, exam_id=exam_id))
     for medication_id in medication_ids:
         session.add(ShareMedication(share_id=share.id, medication_id=medication_id))
+    for occurrence_id in symptom_occurrence_ids:
+        session.add(ShareSymptom(share_id=share.id, occurrence_id=occurrence_id))
     session.commit()
 
     logger.info(
-        "User %s shared %s exams and %s medications",
+        "User %s shared %s exams, %s medications and %s symptom occurrences",
         user.id,
         len(exam_ids),
         len(medication_ids),
+        len(symptom_occurrence_ids),
     )
     return ShareCreatedResponse(
-        group_key=_share_group_key(exam_ids, medication_ids),
+        group_key=_share_group_key(
+            exam_ids, medication_ids, symptom_occurrence_ids
+        ),
         share=_share_code_response(share, code=code),
     )
 
@@ -1115,23 +1370,39 @@ def list_share_groups(
             select(Medication).where(Medication.user_id == user.id)
         ).all()
     }
+    occurrences_by_id = {
+        occurrence.id: (occurrence, symptom)
+        for occurrence, symptom in session.exec(
+            select(SymptomOccurrence, Symptom)
+            .join(Symptom, SymptomOccurrence.symptom_id == Symptom.id)
+            .where(Symptom.user_id == user.id)
+        ).all()
+    }
 
     groups: Dict[str, Dict[str, object]] = {}
     for share in shares:
-        exam_ids, medication_ids = selection.get(share.id, ([], []))
+        exam_ids, medication_ids, symptom_ids = selection.get(
+            share.id, ([], [], [])
+        )
         # Records deleted since sharing simply drop out of the group.
         remaining_exams = [item for item in exam_ids if item in exams_by_id]
         remaining_medications = [
             item for item in medication_ids if item in medications_by_id
         ]
-        if not remaining_exams and not remaining_medications:
+        remaining_symptoms = [
+            item for item in symptom_ids if item in occurrences_by_id
+        ]
+        if not remaining_exams and not remaining_medications and not remaining_symptoms:
             continue
-        key = _share_group_key(remaining_exams, remaining_medications)
+        key = _share_group_key(
+            remaining_exams, remaining_medications, remaining_symptoms
+        )
         group = groups.setdefault(
             key,
             {
                 "exam_ids": remaining_exams,
                 "medication_ids": remaining_medications,
+                "symptom_occurrence_ids": remaining_symptoms,
                 "shares": [],
             },
         )
@@ -1141,6 +1412,7 @@ def list_share_groups(
     for key, group in groups.items():
         exam_ids = group["exam_ids"]
         medication_ids = group["medication_ids"]
+        symptom_ids = group["symptom_occurrence_ids"]
         group_shares: List[ShareGrant] = group["shares"]  # type: ignore[assignment]
         group_shares.sort(key=lambda item: as_utc(item.created_at), reverse=True)
         result.append(
@@ -1148,6 +1420,7 @@ def list_share_groups(
                 group_key=key,
                 exam_ids=exam_ids,  # type: ignore[arg-type]
                 medication_ids=medication_ids,  # type: ignore[arg-type]
+                symptom_occurrence_ids=symptom_ids,  # type: ignore[arg-type]
                 exams=[
                     SharedExamSummary(
                         id=item,
@@ -1164,6 +1437,10 @@ def list_share_groups(
                     )
                     for item in medication_ids  # type: ignore[union-attr]
                 ],
+                symptoms=_shared_symptoms(
+                    symptom_ids,  # type: ignore[arg-type]
+                    occurrences_by_id,
+                ),
                 times_shared=len(group_shares),
                 last_shared_at=as_utc(group_shares[0].created_at),
                 active_codes=sum(
@@ -1253,8 +1530,8 @@ def guest_shared_data(
     session: Session = Depends(get_session),
 ) -> GuestShareData:
     """Read-only payload: only the records this code was issued for."""
-    exam_ids, medication_ids = _share_selection(session, [share]).get(
-        share.id, ([], [])
+    exam_ids, medication_ids, symptom_ids = _share_selection(session, [share]).get(
+        share.id, ([], [], [])
     )
 
     exams: List[Exam] = []
@@ -1282,6 +1559,31 @@ def guest_shared_data(
         if medication_ids
         else []
     )
+
+    symptom_rows = (
+        session.exec(
+            select(SymptomOccurrence, Symptom)
+            .join(Symptom, SymptomOccurrence.symptom_id == Symptom.id)
+            .where(SymptomOccurrence.id.in_(symptom_ids))
+            .order_by(Symptom.title, SymptomOccurrence.start_date.desc())
+        ).all()
+        if symptom_ids
+        else []
+    )
+    symptoms_by_id: Dict[int, GuestSymptomResponse] = {}
+    for occurrence, symptom in symptom_rows:
+        guest_symptom = symptoms_by_id.get(symptom.id)
+        if guest_symptom is None:
+            guest_symptom = GuestSymptomResponse(id=symptom.id, title=symptom.title)
+            symptoms_by_id[symptom.id] = guest_symptom
+        guest_symptom.occurrences.append(
+            GuestSymptomOccurrenceResponse(
+                id=occurrence.id,
+                observation=occurrence.observation,
+                start_date=occurrence.start_date,
+                end_date=occurrence.end_date,
+            )
+        )
 
     return GuestShareData(
         share=_guest_share_info(session, share),
@@ -1316,6 +1618,7 @@ def guest_shared_data(
             )
             for medication in medications
         ],
+        symptoms=list(symptoms_by_id.values()),
     )
 
 
@@ -1337,7 +1640,9 @@ def guest_time_series(
     selection, so a guest can never plot records that were not shared.
     """
     specs = _clean_specs(specs)
-    exam_ids, _ = _share_selection(session, [share]).get(share.id, ([], []))
+    exam_ids, _, _ = _share_selection(session, [share]).get(
+        share.id, ([], [], [])
+    )
     if not exam_ids:
         return _build_time_series([], specs, start_date, end_date)
 

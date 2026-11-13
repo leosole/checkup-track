@@ -42,7 +42,7 @@ export function GroupList({
       ) : groups.length === 0 ? (
         <EmptyState
           title="Nothing shared yet"
-          hint="Select exams or medications above to create your first one-time code."
+          hint="Select exams, medications or symptoms above to create your first one-time code."
         />
       ) : (
         <div className="space-y-4">
@@ -83,6 +83,11 @@ export function GroupList({
                 {group.medications.map((medication) => (
                   <Badge key={`medication-${medication.id}`} tone="info">
                     {medication.name} · {medication.dosage}
+                  </Badge>
+                ))}
+                {group.symptoms.map((symptom) => (
+                  <Badge key={`symptom-${symptom.id}`} tone="danger">
+                    {symptom.title} · {plural(symptom.occurrences.length, "occurrence")}
                   </Badge>
                 ))}
               </div>

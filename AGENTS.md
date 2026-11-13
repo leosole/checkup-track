@@ -35,9 +35,10 @@ backend/object_storage.py  Backblaze B2 (S3 API) with local-disk fallback
 frontend/src/app.tsx    auth gate: SignInView when signed out, DashboardView when signed in
 frontend/src/api-client.ts  typed fetch wrapper; every protected call sends Bearer token
 frontend/src/auth-context.tsx  user bootstrap; JWT lives in localStorage (`vitals.jwt`)
-frontend/src/components/  dashboard-view, calendar-grid, analytics-chart,
-                          medication-modal, sign-in-view, share-view (owner),
-                          guest-view (public read-only), ui/ primitives
+frontend/src/components/  dashboard/, calendar-grid, analytics-chart,
+                          medication-modal, symptom-modal, sign-in-view,
+                          share-view (owner), guest-view (public read-only),
+                          ui/ primitives
 scripts/preview.sh      starts uvicorn (8000) + vite (5173 by default) locally
 ```
 
@@ -179,7 +180,10 @@ JWT: `GET /api/auth/me`; `GET /api/profile/providers`,
 `title`, ≤ 25 MB); `GET /api/exams`; `PATCH /api/exams/{id}` (rename / change date);
 `GET /api/exams/{id}/pdf` (streams the stored PDF); `GET /api/exams/search?q=`;
 `POST|GET /api/medications`, `PATCH|DELETE /api/medications/{id}`;
-`GET /api/calendar`;
+`POST /api/symptoms` (JSON: `title` + `dates[]` occurrences),
+`PATCH|DELETE /api/symptoms/occurrences/{id}`; `GET /api/calendar`;
+`POST /api/shares` accepts `symptom_occurrence_ids` alongside
+`exam_ids`/`medication_ids`, and guests get symptoms nested under their title;
 `GET /api/analytics/time-series?specs=Glucose&specs=Hemoglobin&start_date=&end_date=`.
 Sharing: `POST|GET /api/shares`, `DELETE /api/shares/{id}` (revoke).
 Guest reads: `GET /api/guest/data`, `GET /api/guest/exams/{id}/pdf`,
@@ -198,7 +202,7 @@ reuses. Identical selections are one group; changing the selection makes a new o
 
 Before calling work done:
 
-1. `cd backend && .venv/bin/python -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, shareexam, sharegrant, sharemedication, user, userprovidercredential`.
+1. `cd backend && .venv/bin/python -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, shareexam, sharegrant, sharemedication, sharesymptom, symptom, symptomoccurrence, user, userprovidercredential`.
 2. `npm --prefix frontend run typecheck` (and `build` when touching UI).
 3. Smoke the changed endpoints against a running backend. Use a throwaway DB
    (e.g. `DATABASE_URL=sqlite:////tmp/smoke.db`) so you never pollute `backend/health.db`.
