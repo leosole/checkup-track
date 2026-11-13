@@ -85,7 +85,7 @@ function DashboardPage() {
         <StatCard
           label="Active medications"
           value={active_meds}
-          hint={`${medications.length} total tracked`}
+          hint={`${medications.length} use${medications.length === 1 ? "" : "s"} on file`}
           tone="gray"
         />
       </div>

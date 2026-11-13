@@ -15,6 +15,7 @@ from models import (
     ExamBiomarker,
     GuestCodeRequest,
     Medication,
+    MedicationUse,
     ShareCreate,
     ShareGrant,
     ShareGroupTitleUpdate,
@@ -56,26 +57,10 @@ class ShareTests(unittest.TestCase):
             pdf_path="exams/c.pdf",
             markdown_path="storage/markdowns/c.md",
         )
-        self.medication_a = Medication(
-            user_id=self.user.id,
-            name="Med A",
-            dosage="10 mg",
-            frequency_per_day=1,
-            start_date=date(2026, 1, 1),
-        )
-        self.medication_b = Medication(
-            user_id=self.user.id,
-            name="Med B",
-            dosage="5 mg",
-            frequency_per_day=2,
-            start_date=date(2026, 2, 1),
-        )
+        self.medication_a = Medication(user_id=self.user.id, name="Med A")
+        self.medication_b = Medication(user_id=self.user.id, name="Med B")
         self.other_medication = Medication(
-            user_id=self.other_user.id,
-            name="Med C",
-            dosage="1 mg",
-            frequency_per_day=1,
-            start_date=date(2026, 3, 1),
+            user_id=self.other_user.id, name="Med C"
         )
         self.symptom = Symptom(user_id=self.user.id, title="Headache")
         self.other_symptom = Symptom(user_id=self.other_user.id, title="Cramp")
@@ -122,6 +107,29 @@ class ShareTests(unittest.TestCase):
         for row in rows[2:]:
             self.session.refresh(row)
 
+        self.use_a = MedicationUse(
+            medication_id=self.medication_a.id,
+            dosage="10 mg",
+            frequency_per_day=1,
+            start_date=date(2026, 1, 1),
+        )
+        self.use_b = MedicationUse(
+            medication_id=self.medication_b.id,
+            dosage="5 mg",
+            frequency_per_day=2,
+            start_date=date(2026, 2, 1),
+        )
+        self.other_use = MedicationUse(
+            medication_id=self.other_medication.id,
+            dosage="1 mg",
+            frequency_per_day=1,
+            start_date=date(2026, 3, 1),
+        )
+        self.session.add_all([self.use_a, self.use_b, self.other_use])
+        self.session.commit()
+        for use in (self.use_a, self.use_b, self.other_use):
+            self.session.refresh(use)
+
         self.environment = patch.dict(os.environ, {"JWT_SECRET": "test-secret"})
         self.environment.start()
         self.addCleanup(self.environment.stop)
@@ -131,14 +139,14 @@ class ShareTests(unittest.TestCase):
     def create(
         self,
         exam_ids=(),
-        medication_ids=(),
+        medication_use_ids=(),
         symptom_occurrence_ids=(),
         user=None,
     ):
         return main.create_share(
             ShareCreate(
                 exam_ids=list(exam_ids),
-                medication_ids=list(medication_ids),
+                medication_use_ids=list(medication_use_ids),
                 symptom_occurrence_ids=list(symptom_occurrence_ids),
             ),
             user or self.user,
@@ -154,12 +162,12 @@ class ShareTests(unittest.TestCase):
         return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
     def test_creation_returns_code_once_and_stores_only_a_hash(self) -> None:
-        created = self.create([self.exam_a.id], [self.medication_a.id])
+        created = self.create([self.exam_a.id], [self.use_a.id])
 
         self.assertTrue(created.share.code)
         self.assertEqual(
             created.group_key,
-            f"exams={self.exam_a.id};medications={self.medication_a.id}",
+            f"exams={self.exam_a.id};medications={self.use_a.id}",
         )
         share = self.stored_share(created.share.id)
         self.assertNotEqual(share.code_hash, created.share.code)
@@ -172,7 +180,7 @@ class ShareTests(unittest.TestCase):
         self.assertEqual(exams_raised.exception.status_code, 404)
 
         with self.assertRaises(HTTPException) as medications_raised:
-            self.create([], [self.other_medication.id])
+            self.create([], [self.other_use.id])
         self.assertEqual(medications_raised.exception.status_code, 404)
 
     def test_requires_at_least_one_record(self) -> None:
@@ -211,7 +219,7 @@ class ShareTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 403)
 
     def test_guest_sees_only_selected_records_and_cannot_use_owner_routes(self) -> None:
-        created = self.create([self.exam_a.id], [self.medication_a.id])
+        created = self.create([self.exam_a.id], [self.use_a.id])
         assert created.share.code is not None
         guest = main.redeem_share_code(
             GuestCodeRequest(code=created.share.code), self.session
@@ -225,6 +233,9 @@ class ShareTests(unittest.TestCase):
         self.assertEqual(
             [medication.id for medication in data.medications],
             [self.medication_a.id],
+        )
+        self.assertEqual(
+            [use.id for use in data.medications[0].uses], [self.use_a.id]
         )
         self.assertEqual(data.share.owner_name, "One")
         self.assertNotIn("pdf_path", data.exams[0].model_dump())
@@ -283,8 +294,8 @@ class ShareTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 422)
 
     def test_identical_selections_share_a_group_and_reshares_raise_the_count(self) -> None:
-        first = self.create([self.exam_a.id], [self.medication_a.id])
-        second = self.create([self.exam_a.id], [self.medication_a.id])
+        first = self.create([self.exam_a.id], [self.use_a.id])
+        second = self.create([self.exam_a.id], [self.use_a.id])
         self.create([self.exam_b.id])
 
         self.assertEqual(first.group_key, second.group_key)
@@ -401,6 +412,13 @@ class ShareTests(unittest.TestCase):
         self.assertEqual(repeated.symptom_occurrence_ids, occurrence_ids)
         self.assertEqual([item.title for item in repeated.symptoms], ["Headache"])
         self.assertEqual(len(repeated.symptoms[0].occurrences), 2)
+
+    def test_deleting_a_use_drops_it_from_share_groups(self) -> None:
+        self.create(medication_use_ids=[self.use_a.id])
+
+        main.delete_medication_use(self.use_a.id, self.user, self.session)
+
+        self.assertEqual(main.list_share_groups(self.user, self.session), [])
 
     def test_deleting_an_occurrence_drops_it_from_share_groups(self) -> None:
         self.create(symptom_occurrence_ids=[self.occurrence_a.id])

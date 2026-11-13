@@ -220,10 +220,7 @@ export function CalendarGrid({ data, onClick }: CalendarGridProps) {
                             >
                               <span
                                 className="h-1.5 w-1.5 shrink-0 rounded-full"
-                                style={{
-                                  backgroundColor:
-                                    exam.color ?? DEFAULT_EXAM_COLOR,
-                                }}
+                                style={{ backgroundColor: DEFAULT_EXAM_COLOR }}
                               />
                               <span className="truncate">{exam.title}</span>
                             </button>

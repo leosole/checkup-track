@@ -23,7 +23,6 @@ export interface Exam {
   pdf_path: string;
   markdown_path: string;
   laboratory: string | null;
-  color: string | null;
   biomarkers: Biomarker[];
   extraction_error: string | null;
   processing: ExamProcessing | null;

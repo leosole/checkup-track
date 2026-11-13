@@ -13,19 +13,11 @@ export const MED_COLORS = [
   "#f97316",
 ];
 
-/** Used when an exam has no saved calendar color. */
+/** Every exam marker shares one color. */
 export const DEFAULT_EXAM_COLOR = "#8b5cf6";
 
 /** Every symptom bar shares one color so the timeline stays readable. */
 export const SYMPTOM_COLOR = "#f43f5e";
-
-/** Color a medication bar is drawn with (saved color, else the palette). */
-export function medicationColor(
-  medication: CalendarData["medications"][number],
-  index: number,
-): string {
-  return medication.color ?? MED_COLORS[index % MED_COLORS.length];
-}
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -39,11 +31,21 @@ export function shortDate(iso: string): string {
   });
 }
 
-/** Medication windows as generic drawable ranges. */
+/** Medication use windows as generic drawable ranges. */
 export function medicationRanges(
   medications: CalendarData["medications"],
 ): RangeItem[] {
-  return medications.map((medication, index) => ({
+  // One palette color per medication, so all its courses share a color.
+  const colors = new Map<number, string>();
+  for (const medication of medications) {
+    if (!colors.has(medication.medication_id)) {
+      colors.set(
+        medication.medication_id,
+        MED_COLORS[colors.size % MED_COLORS.length],
+      );
+    }
+  }
+  return medications.map((medication) => ({
     id: `medication-${medication.id}`,
     item_id: medication.id,
     kind: "medication",
@@ -51,7 +53,7 @@ export function medicationRanges(
     start_date: medication.start_date,
     end_date: medication.end_date,
     ongoing: medication.end_date === null,
-    color: medicationColor(medication, index),
+    color: colors.get(medication.medication_id) ?? MED_COLORS[0],
   }));
 }
 

@@ -542,7 +542,6 @@ def _to_response(
         pdf_path=exam.pdf_path,
         markdown_path=exam.markdown_path,
         laboratory=exam.laboratory,
-        color=exam.color,
         biomarkers=[
             BiomarkerResponse(
                 id=b.id,

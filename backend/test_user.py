@@ -14,6 +14,7 @@ from models import (
     Exam,
     ExamBiomarker,
     Medication,
+    MedicationUse,
     ShareExam,
     ShareGrant,
     ShareMedication,
@@ -96,17 +97,19 @@ def ensure_test_user(session: Session) -> User:
                     reference_range=reference,
                     is_abnormal=abnormal,
                 ))
+        vitamin = Medication(user_id=user.id, name="Sample vitamin D")
+        iron = Medication(user_id=user.id, name="Sample iron supplement")
+        session.add_all([vitamin, iron])
+        session.flush()
         session.add_all([
-            Medication(
-                user_id=user.id,
-                name="Sample vitamin D",
+            MedicationUse(
+                medication_id=vitamin.id,
                 dosage="1000 IU",
                 frequency_per_day=1,
                 start_date=today - timedelta(days=60),
             ),
-            Medication(
-                user_id=user.id,
-                name="Sample iron supplement",
+            MedicationUse(
+                medication_id=iron.id,
                 dosage="18 mg",
                 frequency_per_day=1,
                 start_date=today - timedelta(days=150),

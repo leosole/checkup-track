@@ -143,7 +143,7 @@ class TestAccountAPITests(unittest.TestCase):
         self.assertEqual(persisted[exam_id]["date_performed"], "2026-10-12")
         self.assertEqual(len(persisted[exam_id]["biomarkers"]), 3)
         medication = self.client.get("/api/medications").json()[0]
-        changed = self.client.patch(f"/api/medications/{medication['id']}", json={
+        changed = self.client.patch(f"/api/medications/uses/{medication['id']}", json={
             "medication_name": "Edited sample supplement", "dosage": "500 IU",
         })
         self.assertEqual(changed.status_code, 200, changed.text)
@@ -169,11 +169,11 @@ class TestAccountAPITests(unittest.TestCase):
         self.assertTrue(all(response.json()["user"]["capabilities"].values()))
         self.client.headers["Authorization"] = f"Bearer {response.json()['access_token']}"
         created = self.client.post("/api/medications", json={
-            "medication_name": "Owner medication", "dosage": "10 mg",
-            "frequency_per_day": 1, "start_date": "2026-01-01",
+            "medication_name": "Owner medication",
+            "uses": [{"dosage": "10 mg", "frequency_per_day": 1, "start_date": "2026-01-01"}],
         })
         self.assertEqual(created.status_code, 200, created.text)
-        deleted = self.client.delete(f"/api/medications/{created.json()['id']}")
+        deleted = self.client.delete(f"/api/medications/uses/{created.json()[0]['id']}")
         self.assertEqual(deleted.status_code, 200, deleted.text)
         self.assertEqual(self.client.get("/api/medications").json(), [])
 
@@ -183,8 +183,8 @@ class TestAccountAPITests(unittest.TestCase):
         medication = self.client.get("/api/medications").json()[0]
         before = self.counts()
         routes = [
-            ("POST", "/api/medications", {"medication_name": "New", "dosage": "1 mg", "frequency_per_day": 1, "start_date": "2026-01-01"}),
-            ("DELETE", f"/api/medications/{medication['id']}", None),
+            ("POST", "/api/medications", {"medication_name": "New", "uses": [{"dosage": "1 mg", "frequency_per_day": 1, "start_date": "2026-01-01"}]}),
+            ("DELETE", f"/api/medications/uses/{medication['id']}", None),
             ("DELETE", f"/api/exams/{exam['id']}", None),
             ("PUT", f"/api/exams/{exam['id']}/manual", {"title": "Changed", "date_performed": "2026-01-01", "biomarkers": []}),
             ("POST", f"/api/exams/{exam['id']}/retry", None),

@@ -1,26 +1,18 @@
 import { useNavigate } from "@tanstack/react-router";
-import type { Medication } from "../../types";
-import { formatDate } from "../../date-utils";
-import { useDashboardState } from "./provider";
 import { useAuth } from "../../auth-context";
+import { useDashboardState } from "./provider";
 import { Card, EmptyState } from "../ui/badge";
 import { Button } from "../ui/button";
+import { formatUseRange, groupMedications } from "../medications/utils";
 
+/** Recently used medications, grouped by name. */
 export function DashboardMedicationSummary() {
   const { user } = useAuth();
   const dash = useDashboardState();
   const navigate = useNavigate();
-  const medications = dash.medications;
-  const addMedication = () => {
-    dash.set_editing_med(null);
-    dash.set_modal_open(true);
-  };
-  const editMedication = (medication: Medication) => {
-    dash.set_editing_med(medication);
-    dash.set_modal_open(true);
-  };
-  const deleteMedication = (medication: Medication) =>
-    void dash.deleteMedication(medication);
+  const total = dash.medications.length;
+  const groups = groupMedications(dash.medications).slice(0, 5);
+
   return (
     <section>
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -32,7 +24,10 @@ export function DashboardMedicationSummary() {
             variant="secondary"
             size="sm"
             disabled={!user?.capabilities.create_records}
-            onClick={addMedication}
+            onClick={() => {
+              dash.set_editing_med(null);
+              dash.set_modal_open(true);
+            }}
           >
             + Add
           </Button>
@@ -45,59 +40,66 @@ export function DashboardMedicationSummary() {
           View more
         </button>
       </div>
-      {medications.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           title="No medications tracked"
-          hint="Add a regimen to see it span across the calendar timeline."
+          hint="Add a medication to see its uses on the calendar timeline."
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {medications.map((medication) => (
+          {groups.map((group) => (
             <Card
-              key={medication.id}
-              className="flex items-center justify-between p-4"
+              key={group.id}
+              className="flex items-start justify-between gap-2 p-4"
             >
-              <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {medication.name}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                  {group.name}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  {medication.dosage} · {medication.frequency_per_day}×/day
+                  {group.uses[0].dosage} · {group.uses[0].frequency_per_day}×/day
                 </p>
                 <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                  {formatDate(medication.start_date)} →{" "}
-                  {medication.end_date
-                    ? formatDate(medication.end_date)
-                    : "ongoing"}
+                  {formatUseRange(group.uses[0])}
+                </p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                  {group.uses.length} use{group.uses.length === 1 ? "" : "s"}
                 </p>
               </div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  aria-label={`Edit ${medication.name}`}
+                  aria-label={`Edit ${group.name}`}
                   title="Edit medication"
-                  onClick={() => editMedication(medication)}
-                  className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                  disabled={!user?.capabilities.edit_medications}
+                  onClick={() => {
+                    dash.set_editing_med(group.uses[0]);
+                    dash.set_modal_open(true);
+                  }}
+                  className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
                 >
                   <svg
                     className="h-4 w-4"
                     viewBox="0 0 20 20"
                     fill="currentColor"
+                    aria-hidden="true"
                   >
                     <path d="M2.695 14.763l-1.262 3.155a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
                   </svg>
                 </button>
                 <button
                   type="button"
-                  aria-label={`Delete ${medication.name}`}
+                  aria-label={`Delete ${group.name}`}
+                  title="Delete medication"
                   disabled={!user?.capabilities.delete_records}
-                  onClick={() => void deleteMedication(medication)}
+                  onClick={() => void dash.deleteMedication(group.uses[0])}
                   className="rounded-lg p-2 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-500 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
                 >
                   <svg
                     className="h-4 w-4"
                     viewBox="0 0 20 20"
                     fill="currentColor"
+                    aria-hidden="true"
                   >
                     <path
                       fillRule="evenodd"

@@ -3,6 +3,7 @@ import { CalendarItemModal } from "../calendar-item-modal";
 import { ExamRenameModal } from "../exam-rename-modal";
 import { ManualExamModal } from "../manual-exam-modal";
 import { MedicationModal } from "../medication-modal";
+import { medicationNames } from "../medication-modal/utils";
 import { SymptomModal } from "../symptom-modal";
 import { symptomTitles } from "../symptom-modal/utils";
 import { UploadExamModal } from "../upload-exam-modal";
@@ -34,8 +35,9 @@ export function DashboardDialogs({
           dash.modal_open &&
           (dash.editing_med !== null || can_create_records)
         }
-        med={dash.editing_med}
-        onClose={() => {
+        use={dash.editing_med}
+        names={medicationNames(dash.medications)}
+        on_close={() => {
           dash.set_modal_open(false);
           dash.set_editing_med(null);
         }}

@@ -42,7 +42,7 @@ jobs:
           import main, parser, auth, database, models
           from sqlmodel import SQLModel
           assert set(SQLModel.metadata.tables) >= {
-            'user', 'exam', 'exambiomarker', 'medication',
+            'user', 'exam', 'exambiomarker', 'medication', 'medicationuse',
             'userprovidercredential'
           }
           print('backend imports + schema OK')

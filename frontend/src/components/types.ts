@@ -1,4 +1,4 @@
-import type { Exam, Medication, SymptomOccurrence } from "../types";
+import type { Exam, MedicationUse, SymptomOccurrence } from "../types";
 
 export interface LogoProps {
   className?: string;
@@ -12,9 +12,11 @@ export interface UploadExamModalProps {
 
 export interface MedicationModalProps {
   open: boolean;
-  /** Medication being edited; null means "create a new one". */
-  med?: Medication | null;
-  onClose: () => void;
+  /** Medication use being edited; null means "create a new one". */
+  use?: MedicationUse | null;
+  /** Past medication names offered by the combobox. */
+  names: string[];
+  on_close: () => void;
   on_saved: () => void;
 }
 
@@ -45,7 +47,7 @@ export interface SymptomModalProps {
 
 export type CalendarSelection =
   | { kind: "exam"; exam: Exam }
-  | { kind: "medication"; medication: Medication }
+  | { kind: "medication"; medication: MedicationUse }
   | { kind: "symptom"; symptom: SymptomOccurrence };
 
 export interface CalendarItemModalProps {

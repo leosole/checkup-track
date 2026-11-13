@@ -67,6 +67,8 @@ from models import (
     GuestAuthResponse,
     GuestCodeRequest,
     GuestExamResponse,
+    GuestMedicationResponse,
+    GuestMedicationUseResponse,
     GuestShareData,
     GuestShareInfo,
     GuestSymptomOccurrenceResponse,
@@ -76,8 +78,9 @@ from models import (
     ManualExamInput,
     Medication,
     MedicationCreate,
-    MedicationResponse,
-    MedicationUpdate,
+    MedicationUse,
+    MedicationUseResponse,
+    MedicationUseUpdate,
     ProviderCredentialInput,
     ProviderCredentialStatus,
     ProviderOrderUpdate,
@@ -383,7 +386,6 @@ def _exam_to_response(
         pdf_path=exam.pdf_path,
         markdown_path=exam.markdown_path,
         laboratory=exam.laboratory,
-        color=exam.color,
         biomarkers=[
             BiomarkerResponse(
                 id=b.id,
@@ -501,10 +503,10 @@ def update_exam(
     user: User = Depends(require_capability("edit_exam_metadata")),
     session: Session = Depends(get_session),
 ) -> ExamResponse:
-    """Update an exam's name, date, laboratory, and/or calendar color.
+    """Update an exam's name, date, and/or laboratory.
 
     Every field is optional; omitted fields keep their current value. Sending
-    ``laboratory: null`` or ``color: null`` clears it.
+    ``laboratory: null`` clears it.
     """
     exam = session.get(Exam, exam_id)
     if exam is None or exam.user_id != user.id:
@@ -516,8 +518,6 @@ def update_exam(
         exam.date_performed = payload.date_performed
     if "laboratory" in provided:
         exam.laboratory = payload.laboratory
-    if "color" in provided:
-        exam.color = payload.color
     session.add(exam)
     session.commit()
     session.refresh(exam)
@@ -665,134 +665,186 @@ def search_exam_route(
 
 
 # ---------------------------------------------------------------------------
-# Medications
+# Medications: a reusable name plus dated uses
 # ---------------------------------------------------------------------------
 
 
-@app.post("/api/medications", response_model=MedicationResponse, tags=["medications"])
+def _medication_use_response(
+    use: MedicationUse, medication: Medication
+) -> MedicationUseResponse:
+    return MedicationUseResponse(
+        id=use.id,
+        medication_id=medication.id,
+        name=medication.name,
+        dosage=use.dosage,
+        frequency_per_day=use.frequency_per_day,
+        start_date=use.start_date,
+        end_date=use.end_date,
+    )
+
+
+def _medication_by_name(
+    session: Session, user_id: str, name: str
+) -> Optional[Medication]:
+    """Case-insensitive lookup of one of the user's medication names."""
+    return session.exec(
+        select(Medication).where(
+            Medication.user_id == user_id,
+            func.lower(Medication.name) == name.lower(),
+        )
+    ).first()
+
+
+def _check_medication_range(start_date: date, end_date: Optional[date]) -> None:
+    if end_date is not None and end_date < start_date:
+        raise HTTPException(
+            status_code=422,
+            detail="end_date must be on or after start_date.",
+        )
+
+
+@app.post(
+    "/api/medications",
+    response_model=List[MedicationUseResponse],
+    tags=["medications"],
+)
 def create_medication(
     payload: MedicationCreate,
     user: User = Depends(require_capability("create_records")),
     session: Session = Depends(get_session),
-) -> MedicationResponse:
-    if payload.end_date is not None and payload.end_date < payload.start_date:
-        raise HTTPException(
-            status_code=422,
-            detail="end_date must be on or after start_date.",
+) -> List[MedicationUseResponse]:
+    """Add one use per entry under a reused or new medication name."""
+    for entry in payload.uses:
+        _check_medication_range(entry.start_date, entry.end_date)
+
+    name = payload.medication_name.strip()
+    medication = _medication_by_name(session, user.id, name)
+    if medication is None:
+        medication = Medication(user_id=user.id, name=name)
+        session.add(medication)
+        session.flush()
+
+    uses = [
+        MedicationUse(
+            medication_id=medication.id,
+            dosage=entry.dosage,
+            frequency_per_day=entry.frequency_per_day,
+            start_date=entry.start_date,
+            end_date=entry.end_date,
         )
-    med = Medication(
-        user_id=user.id,
-        name=payload.medication_name.strip(),
-        dosage=payload.dosage.strip(),
-        frequency_per_day=payload.frequency_per_day,
-        start_date=payload.start_date,
-        end_date=payload.end_date,
-        color=payload.color,
-    )
-    session.add(med)
+        for entry in payload.uses
+    ]
+    session.add_all(uses)
     session.commit()
-    session.refresh(med)
-    return MedicationResponse(
-        id=med.id,
-        name=med.name,
-        dosage=med.dosage,
-        frequency_per_day=med.frequency_per_day,
-        start_date=med.start_date,
-        end_date=med.end_date,
-        color=med.color,
-    )
+    for use in uses:
+        session.refresh(use)
+    session.refresh(medication)
+    return [_medication_use_response(use, medication) for use in uses]
 
 
-@app.get("/api/medications", response_model=List[MedicationResponse], tags=["medications"])
+@app.get(
+    "/api/medications",
+    response_model=List[MedicationUseResponse],
+    tags=["medications"],
+)
 def list_medications(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
-) -> List[MedicationResponse]:
-    meds = session.exec(
-        select(Medication)
+) -> List[MedicationUseResponse]:
+    rows = session.exec(
+        select(MedicationUse, Medication)
+        .join(Medication, MedicationUse.medication_id == Medication.id)
         .where(Medication.user_id == user.id)
-        .order_by(Medication.start_date.desc())
+        .order_by(MedicationUse.start_date.desc(), Medication.name)
     ).all()
-    return [
-        MedicationResponse(
-            id=m.id,
-            name=m.name,
-            dosage=m.dosage,
-            frequency_per_day=m.frequency_per_day,
-            start_date=m.start_date,
-            end_date=m.end_date,
-            color=m.color,
-        )
-        for m in meds
-    ]
+    return [_medication_use_response(use, medication) for use, medication in rows]
 
 
 @app.patch(
-    "/api/medications/{medication_id}",
-    response_model=MedicationResponse,
+    "/api/medications/uses/{use_id}",
+    response_model=MedicationUseResponse,
     tags=["medications"],
 )
-def update_medication(
-    medication_id: int,
-    payload: MedicationUpdate,
+def update_medication_use(
+    use_id: int,
+    payload: MedicationUseUpdate,
     user: User = Depends(require_capability("edit_medications")),
     session: Session = Depends(get_session),
-) -> MedicationResponse:
-    """Edit a medication in place; only the supplied fields change."""
-    med = session.get(Medication, medication_id)
-    if med is None or med.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Medication not found.")
+) -> MedicationUseResponse:
+    """Edit one use; a new name renames its parent medication."""
+    use = session.get(MedicationUse, use_id)
+    medication = (
+        session.get(Medication, use.medication_id) if use is not None else None
+    )
+    if use is None or medication is None or medication.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Medication use not found.")
 
     provided = payload.model_fields_set
     if "medication_name" in provided and payload.medication_name is not None:
-        med.name = payload.medication_name.strip()
+        requested = payload.medication_name.strip()
+        if requested.lower() != medication.name.lower():
+            existing = _medication_by_name(session, user.id, requested)
+            if existing is not None and existing.id != medication.id:
+                # Merge this use into the medication that already has the name,
+                # then drop the old medication if it has nothing left.
+                previous = medication
+                use.medication_id = existing.id
+                session.add(use)
+                session.flush()
+                remaining = session.exec(
+                    select(MedicationUse).where(
+                        MedicationUse.medication_id == previous.id
+                    )
+                ).first()
+                if remaining is None:
+                    session.delete(previous)
+                medication = existing
+            else:
+                medication.name = requested
     if "dosage" in provided and payload.dosage is not None:
-        med.dosage = payload.dosage.strip()
+        use.dosage = payload.dosage
     if "frequency_per_day" in provided and payload.frequency_per_day is not None:
-        med.frequency_per_day = payload.frequency_per_day
+        use.frequency_per_day = payload.frequency_per_day
     if "start_date" in provided and payload.start_date is not None:
-        med.start_date = payload.start_date
+        use.start_date = payload.start_date
     if "end_date" in provided:
-        med.end_date = payload.end_date
-    if "color" in provided:
-        med.color = payload.color
-    if med.end_date is not None and med.end_date < med.start_date:
-        raise HTTPException(
-            status_code=422,
-            detail="end_date must be on or after start_date.",
-        )
+        use.end_date = payload.end_date
+    _check_medication_range(use.start_date, use.end_date)
 
-    session.add(med)
+    session.add(use)
     session.commit()
-    session.refresh(med)
-    return MedicationResponse(
-        id=med.id,
-        name=med.name,
-        dosage=med.dosage,
-        frequency_per_day=med.frequency_per_day,
-        start_date=med.start_date,
-        end_date=med.end_date,
-        color=med.color,
-    )
+    session.refresh(use)
+    session.refresh(medication)
+    return _medication_use_response(use, medication)
 
 
-@app.delete("/api/medications/{medication_id}", tags=["medications"])
-def delete_medication(
-    medication_id: int,
+@app.delete("/api/medications/uses/{use_id}", tags=["medications"])
+def delete_medication_use(
+    use_id: int,
     user: User = Depends(require_capability("delete_records")),
     session: Session = Depends(get_session),
 ) -> dict:
-    med = session.get(Medication, medication_id)
-    if med is None or med.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Medication not found.")
-    # Delete share links first, for the same reason as in delete_exam: without
-    # relationships there is no dependency graph to order the flush with.
-    session.exec(
-        delete(ShareMedication).where(ShareMedication.medication_id == medication_id)
+    """Remove one use, and the medication name once nothing uses it."""
+    use = session.get(MedicationUse, use_id)
+    medication = (
+        session.get(Medication, use.medication_id) if use is not None else None
     )
-    session.delete(med)
+    if use is None or medication is None or medication.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Medication use not found.")
+
+    # Share links point at uses, so they go first.
+    session.exec(
+        delete(ShareMedication).where(ShareMedication.medication_use_id == use.id)
+    )
+    session.delete(use)
+    session.flush()
+    remaining = session.exec(
+        select(MedicationUse).where(MedicationUse.medication_id == medication.id)
+    ).first()
+    if remaining is None:
+        session.delete(medication)
     session.commit()
-    return {"deleted": medication_id}
+    return {"deleted": use_id}
 
 
 # ---------------------------------------------------------------------------
@@ -972,8 +1024,11 @@ def calendar(
     exams = session.exec(
         select(Exam).where(Exam.user_id == user.id).order_by(Exam.date_performed)
     ).all()
-    meds = session.exec(
-        select(Medication).where(Medication.user_id == user.id).order_by(Medication.start_date)
+    med_rows = session.exec(
+        select(MedicationUse, Medication)
+        .join(Medication, MedicationUse.medication_id == Medication.id)
+        .where(Medication.user_id == user.id)
+        .order_by(MedicationUse.start_date, Medication.name)
     ).all()
     symptom_rows = session.exec(
         select(SymptomOccurrence, Symptom)
@@ -987,19 +1042,20 @@ def calendar(
                 id=e.id,
                 title=e.title,
                 date=e.date_performed,
-                color=e.color,
             )
             for e in exams
         ],
         medications=[
             CalendarMedication(
-                id=m.id,
-                name=m.name,
-                start_date=m.start_date,
-                end_date=m.end_date,
-                color=m.color,
+                id=use.id,
+                medication_id=medication.id,
+                name=medication.name,
+                dosage=use.dosage,
+                frequency_per_day=use.frequency_per_day,
+                start_date=use.start_date,
+                end_date=use.end_date,
             )
-            for m in meds
+            for use, medication in med_rows
         ],
         symptoms=[
             CalendarSymptom(
@@ -1147,12 +1203,12 @@ def _share_code_response(
 
 def _share_group_key(
     exam_ids: List[int],
-    medication_ids: List[int],
+    medication_use_ids: List[int],
     symptom_occurrence_ids: List[int] = [],
 ) -> str:
     """Stable identity of a selection, so identical re-shares group together."""
     exams = ",".join(str(item) for item in sorted(exam_ids))
-    medications = ",".join(str(item) for item in sorted(medication_ids))
+    medications = ",".join(str(item) for item in sorted(medication_use_ids))
     key = f"exams={exams};medications={medications}"
     if symptom_occurrence_ids:
         symptoms = ",".join(str(item) for item in sorted(symptom_occurrence_ids))
@@ -1164,7 +1220,7 @@ def _share_selection(
     session: Session,
     shares: List[ShareGrant],
 ) -> Dict[int, Tuple[List[int], List[int], List[int]]]:
-    """Map each share id to its exam, medication and symptom occurrence ids."""
+    """Map each share id to its exam, medication use and symptom ids."""
     if not shares:
         return {}
     share_ids = [share.id for share in shares]
@@ -1183,7 +1239,7 @@ def _share_selection(
     for row in exam_rows:
         exam_ids.setdefault(row.share_id, []).append(row.exam_id)
     for row in medication_rows:
-        medication_ids.setdefault(row.share_id, []).append(row.medication_id)
+        medication_ids.setdefault(row.share_id, []).append(row.medication_use_id)
     for row in symptom_rows:
         occurrence_ids.setdefault(row.share_id, []).append(row.occurrence_id)
     return {
@@ -1253,7 +1309,7 @@ def create_share(
     The plaintext code is returned exactly once; only its hash is stored.
     """
     exam_ids = sorted(set(payload.exam_ids))
-    medication_ids = sorted(set(payload.medication_ids))
+    medication_ids = sorted(set(payload.medication_use_ids))
     symptom_occurrence_ids = sorted(set(payload.symptom_occurrence_ids))
     if not exam_ids and not medication_ids and not symptom_occurrence_ids:
         raise HTTPException(
@@ -1272,8 +1328,11 @@ def create_share(
             )
     if medication_ids:
         owned_medications = session.exec(
-            select(Medication.id).where(
-                Medication.user_id == user.id, Medication.id.in_(medication_ids)
+            select(MedicationUse.id)
+            .join(Medication, MedicationUse.medication_id == Medication.id)
+            .where(
+                Medication.user_id == user.id,
+                MedicationUse.id.in_(medication_ids),
             )
         ).all()
         if sorted(owned_medications) != medication_ids:
@@ -1326,8 +1385,10 @@ def create_share(
     session.refresh(share)
     for exam_id in exam_ids:
         session.add(ShareExam(share_id=share.id, exam_id=exam_id))
-    for medication_id in medication_ids:
-        session.add(ShareMedication(share_id=share.id, medication_id=medication_id))
+    for medication_use_id in medication_ids:
+        session.add(
+            ShareMedication(share_id=share.id, medication_use_id=medication_use_id)
+        )
     for occurrence_id in symptom_occurrence_ids:
         session.add(ShareSymptom(share_id=share.id, occurrence_id=occurrence_id))
     session.commit()
@@ -1366,9 +1427,11 @@ def _share_group_responses(
         for exam in session.exec(select(Exam).where(Exam.user_id == user.id)).all()
     }
     medications_by_id = {
-        medication.id: medication
-        for medication in session.exec(
-            select(Medication).where(Medication.user_id == user.id)
+        use.id: (use, medication)
+        for use, medication in session.exec(
+            select(MedicationUse, Medication)
+            .join(Medication, MedicationUse.medication_id == Medication.id)
+            .where(Medication.user_id == user.id)
         ).all()
     }
     occurrences_by_id = {
@@ -1402,7 +1465,7 @@ def _share_group_responses(
             key,
             {
                 "exam_ids": remaining_exams,
-                "medication_ids": remaining_medications,
+                "medication_use_ids": remaining_medications,
                 "symptom_occurrence_ids": remaining_symptoms,
                 "shares": [],
             },
@@ -1419,7 +1482,7 @@ def _share_group_responses(
     result: List[ShareGroupResponse] = []
     for key, group in groups.items():
         exam_ids = group["exam_ids"]
-        medication_ids = group["medication_ids"]
+        medication_ids = group["medication_use_ids"]
         symptom_ids = group["symptom_occurrence_ids"]
         group_shares: List[ShareGrant] = group["shares"]  # type: ignore[assignment]
         group_shares.sort(key=lambda item: as_utc(item.created_at), reverse=True)
@@ -1428,7 +1491,7 @@ def _share_group_responses(
                 group_key=key,
                 title=titles.get(key),
                 exam_ids=exam_ids,  # type: ignore[arg-type]
-                medication_ids=medication_ids,  # type: ignore[arg-type]
+                medication_use_ids=medication_ids,  # type: ignore[arg-type]
                 symptom_occurrence_ids=symptom_ids,  # type: ignore[arg-type]
                 exams=[
                     SharedExamSummary(
@@ -1441,8 +1504,11 @@ def _share_group_responses(
                 medications=[
                     SharedMedicationSummary(
                         id=item,
-                        name=medications_by_id[item].name,
-                        dosage=medications_by_id[item].dosage,
+                        name=medications_by_id[item][1].name,
+                        dosage=medications_by_id[item][0].dosage,
+                        frequency_per_day=medications_by_id[item][0].frequency_per_day,
+                        start_date=medications_by_id[item][0].start_date,
+                        end_date=medications_by_id[item][0].end_date,
                     )
                     for item in medication_ids  # type: ignore[union-attr]
                 ],
@@ -1614,15 +1680,33 @@ def guest_shared_data(
         for biomarker in biomarkers:
             biomarkers_by_exam.setdefault(biomarker.exam_id, []).append(biomarker)
 
-    medications = (
+    medication_rows = (
         session.exec(
-            select(Medication)
-            .where(Medication.id.in_(medication_ids))
-            .order_by(Medication.start_date.desc())
+            select(MedicationUse, Medication)
+            .join(Medication, MedicationUse.medication_id == Medication.id)
+            .where(MedicationUse.id.in_(medication_ids))
+            .order_by(Medication.name, MedicationUse.start_date.desc())
         ).all()
         if medication_ids
         else []
     )
+    medications_by_id: Dict[int, GuestMedicationResponse] = {}
+    for medication_use, medication in medication_rows:
+        guest_medication = medications_by_id.get(medication.id)
+        if guest_medication is None:
+            guest_medication = GuestMedicationResponse(
+                id=medication.id, name=medication.name
+            )
+            medications_by_id[medication.id] = guest_medication
+        guest_medication.uses.append(
+            GuestMedicationUseResponse(
+                id=medication_use.id,
+                dosage=medication_use.dosage,
+                frequency_per_day=medication_use.frequency_per_day,
+                start_date=medication_use.start_date,
+                end_date=medication_use.end_date,
+            )
+        )
 
     symptom_rows = (
         session.exec(
@@ -1670,18 +1754,7 @@ def guest_shared_data(
             )
             for exam in exams
         ],
-        medications=[
-            MedicationResponse(
-                id=medication.id,
-                name=medication.name,
-                dosage=medication.dosage,
-                frequency_per_day=medication.frequency_per_day,
-                start_date=medication.start_date,
-                end_date=medication.end_date,
-                color=medication.color,
-            )
-            for medication in medications
-        ],
+        medications=list(medications_by_id.values()),
         symptoms=list(symptoms_by_id.values()),
     )
 

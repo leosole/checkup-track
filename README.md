@@ -27,8 +27,9 @@ medications on the same timeline.
   exam details to add it to the plot; plotted markers are marked in place and
   remembered for your next visit. Abnormal points stand out, and hovering a
   point shows its value, date, and source exam.
-- **Medications** — track name, dosage, doses per day, and start/end dates, with
-  an active-medication count on the dashboard.
+- **Medications** — track each medication by name with one or more dated uses,
+  each carrying its dosage, doses per day and start/end dates, with an
+  active-medication count on the dashboard.
 - **Calendar** — a month view of exams and medication periods; click any entry
   to open its details.
 - **Sharing** — pick exams and medications and get a single-use code that

@@ -1,28 +1,26 @@
-import type { Medication } from "../../types";
-import type { SortState } from "../ui/types";
+import type { MedicationUse } from "../../types";
 
-export type MedicationStatus = "all" | "active" | "inactive";
-export type MedicationSortField = "name" | "start_date";
-export type MedicationSort = SortState<MedicationSortField>;
+export type MedicationStatus = "all" | "ongoing" | "past";
+
+/** A medication name with its uses, newest first. */
+export interface MedicationGroup {
+  /** The medication id shared by its uses. */
+  id: number;
+  name: string;
+  uses: MedicationUse[];
+}
 
 export interface MedicationFiltersProps {
   query: string;
   status: MedicationStatus;
-  start_from: string;
-  start_to: string;
   on_query_change: (value: string) => void;
   on_status_change: (value: MedicationStatus) => void;
-  on_start_from_change: (value: string) => void;
-  on_start_to_change: (value: string) => void;
 }
 
-export interface MedicationTableProps {
-  medications: Medication[];
+export interface MedicationListProps {
+  groups: MedicationGroup[];
+  can_edit: boolean;
   can_delete: boolean;
-  deleting_id: number | null;
-  isActive: (medication: Medication) => boolean;
-  sort: MedicationSort;
-  on_sort_change: (field: MedicationSortField) => void;
-  on_edited_medication: (id: number) => void;
-  on_deleted_medication: (id: number) => void;
+  on_edit: (use: MedicationUse) => void;
+  on_delete: (use: MedicationUse) => void;
 }

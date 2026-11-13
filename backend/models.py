@@ -1,26 +1,11 @@
 """Database models (SQLModel tables) and API/LLM schemas (Pydantic)."""
 
-import re
 from datetime import date, datetime, timezone
 from enum import Enum
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field as PydanticField, field_validator
 from sqlmodel import Field, SQLModel
-
-HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
-
-
-def _normalize_color(value: Optional[str]) -> Optional[str]:
-    """Keep colors as ``#rrggbb`` (or None for "use the default")."""
-    if value is None:
-        return None
-    value = value.strip()
-    if not value:
-        return None
-    if not HEX_COLOR_RE.match(value):
-        raise ValueError("Color must be a hex value like #7c3aed.")
-    return value.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -50,8 +35,6 @@ class Exam(SQLModel, table=True):
     markdown_path: str
     # Laboratory that produced the report; usually extracted, user-settable.
     laboratory: Optional[str] = None
-    # Calendar color; None means the default exam color.
-    color: Optional[str] = None
 
 
 class ExamProcessingJob(SQLModel, table=True):
@@ -81,15 +64,26 @@ class ExamBiomarker(SQLModel, table=True):
 
 
 class Medication(SQLModel, table=True):
+    """A reusable medication name; its dated courses hang off it."""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: str = Field(foreign_key="user.id", index=True)
     name: str
+
+
+class MedicationUse(SQLModel, table=True):
+    """One course of a medication, with its own dosage and dates.
+
+    ``end_date is None`` means the course is ongoing; an end date equal to the
+    start date is a single day.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    medication_id: int = Field(foreign_key="medication.id", index=True)
     dosage: str
     frequency_per_day: int
     start_date: date
     end_date: Optional[date] = None
-    # Calendar color; None means the rotating default palette color.
-    color: Optional[str] = None
 
 
 class Symptom(SQLModel, table=True):
@@ -137,8 +131,10 @@ class ShareExam(SQLModel, table=True):
 
 
 class ShareMedication(SQLModel, table=True):
+    """One shared medication course (individual courses are selectable)."""
+
     share_id: int = Field(foreign_key="sharegrant.id", primary_key=True)
-    medication_id: int = Field(foreign_key="medication.id", primary_key=True)
+    medication_use_id: int = Field(foreign_key="medicationuse.id", primary_key=True)
 
 
 class ShareSymptom(SQLModel, table=True):
@@ -267,7 +263,6 @@ class ExamResponse(BaseModel):
     pdf_path: str
     markdown_path: str
     laboratory: Optional[str] = None
-    color: Optional[str] = None
     biomarkers: List[BiomarkerResponse] = []
     extraction_error: Optional[str] = None
     processing: Optional["ExamProcessingResponse"] = None
@@ -282,34 +277,52 @@ class ExamProcessingResponse(BaseModel):
     updated_at: datetime
 
 
-class MedicationCreate(BaseModel):
-    medication_name: str = PydanticField(min_length=1, max_length=200)
-    dosage: str = PydanticField(min_length=1, max_length=200)
-    frequency_per_day: int = PydanticField(ge=1, le=32)
+class MedicationUseInput(BaseModel):
+    """One dated course inside a medication's use list."""
+
     start_date: date
     end_date: Optional[date] = None
-    color: Optional[str] = None
+    dosage: str = PydanticField(min_length=1, max_length=200)
+    frequency_per_day: int = PydanticField(ge=1, le=32)
 
-    @field_validator("color")
+    @field_validator("dosage")
     @classmethod
-    def color_must_be_hex(cls, value: Optional[str]) -> Optional[str]:
-        return _normalize_color(value)
+    def trim_dosage(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Dosage must not be blank.")
+        return value
 
 
-class MedicationResponse(BaseModel):
+class MedicationCreate(BaseModel):
+    medication_name: str = PydanticField(min_length=1, max_length=200)
+    uses: List[MedicationUseInput] = PydanticField(min_length=1, max_length=50)
+
+    @field_validator("medication_name")
+    @classmethod
+    def medication_name_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Medication name must not be blank.")
+        return value
+
+
+class MedicationUseResponse(BaseModel):
     id: int
+    medication_id: int
     name: str
     dosage: str
     frequency_per_day: int
     start_date: date
     end_date: Optional[date] = None
-    color: Optional[str] = None
 
 
-class MedicationUpdate(BaseModel):
-    """Partial medication update: omitted fields keep their current value.
+class MedicationUseUpdate(BaseModel):
+    """Partial update of one medication use.
 
-    An explicit ``end_date: null`` clears the end date (ongoing regimen).
+    A ``medication_name`` renames the parent medication (merging into an
+    existing medication of that name). An explicit ``end_date: null`` makes the
+    use ongoing.
     """
 
     medication_name: Optional[str] = PydanticField(default=None, min_length=1, max_length=200)
@@ -317,12 +330,16 @@ class MedicationUpdate(BaseModel):
     frequency_per_day: Optional[int] = PydanticField(default=None, ge=1, le=32)
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    color: Optional[str] = None
 
-    @field_validator("color")
+    @field_validator("medication_name", "dosage")
     @classmethod
-    def color_must_be_hex(cls, value: Optional[str]) -> Optional[str]:
-        return _normalize_color(value)
+    def trim_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("Value must not be blank.")
+        return value
 
 
 class SymptomDateInput(BaseModel):
@@ -399,7 +416,6 @@ class ExamUpdate(BaseModel):
     title: Optional[str] = PydanticField(default=None, min_length=1, max_length=200)
     date_performed: Optional[date] = None
     laboratory: Optional[str] = PydanticField(default=None, max_length=200)
-    color: Optional[str] = None
 
     @field_validator("title")
     @classmethod
@@ -417,11 +433,6 @@ class ExamUpdate(BaseModel):
         if value is None:
             return None
         return value.strip() or None
-
-    @field_validator("color")
-    @classmethod
-    def color_must_be_hex(cls, value: Optional[str]) -> Optional[str]:
-        return _normalize_color(value)
 
 
 class ManualBiomarkerInput(BaseModel):
@@ -462,15 +473,18 @@ class CalendarExam(BaseModel):
     id: int
     title: str
     date: date
-    color: Optional[str] = None
 
 
 class CalendarMedication(BaseModel):
+    """One medication course on the timeline."""
+
     id: int
+    medication_id: int
     name: str
+    dosage: str
+    frequency_per_day: int
     start_date: date
     end_date: Optional[date] = None
-    color: Optional[str] = None
 
 
 class CalendarSymptom(BaseModel):
@@ -515,13 +529,15 @@ class ShareCreate(BaseModel):
     """Records a user chose to share, plus how long the code stays usable."""
 
     exam_ids: List[int] = PydanticField(default_factory=list, max_length=500)
-    medication_ids: List[int] = PydanticField(default_factory=list, max_length=500)
+    medication_use_ids: List[int] = PydanticField(
+        default_factory=list, max_length=500
+    )
     symptom_occurrence_ids: List[int] = PydanticField(
         default_factory=list, max_length=500
     )
     expires_in_days: int = PydanticField(default=7, ge=1, le=30)
 
-    @field_validator("exam_ids", "medication_ids", "symptom_occurrence_ids")
+    @field_validator("exam_ids", "medication_use_ids", "symptom_occurrence_ids")
     @classmethod
     def ids_must_be_positive(cls, value: List[int]) -> List[int]:
         if any(item < 1 for item in value):
@@ -550,6 +566,9 @@ class SharedMedicationSummary(BaseModel):
     id: int
     name: str
     dosage: str
+    frequency_per_day: int
+    start_date: date
+    end_date: Optional[date] = None
 
 
 class SharedSymptomOccurrenceSummary(BaseModel):
@@ -587,7 +606,7 @@ class ShareGroupResponse(BaseModel):
     group_key: str
     title: Optional[str] = None
     exam_ids: List[int] = []
-    medication_ids: List[int] = []
+    medication_use_ids: List[int] = []
     symptom_occurrence_ids: List[int] = []
     exams: List[SharedExamSummary] = []
     medications: List[SharedMedicationSummary] = []
@@ -635,10 +654,26 @@ class GuestSymptomResponse(BaseModel):
     occurrences: List[GuestSymptomOccurrenceResponse] = []
 
 
+class GuestMedicationUseResponse(BaseModel):
+    id: int
+    dosage: str
+    frequency_per_day: int
+    start_date: date
+    end_date: Optional[date] = None
+
+
+class GuestMedicationResponse(BaseModel):
+    """Guest-facing medication: the name with its shared courses nested."""
+
+    id: int
+    name: str
+    uses: List[GuestMedicationUseResponse] = []
+
+
 class GuestShareData(BaseModel):
     share: GuestShareInfo
     exams: List[GuestExamResponse] = []
-    medications: List[MedicationResponse] = []
+    medications: List[GuestMedicationResponse] = []
     symptoms: List[GuestSymptomResponse] = []
 
 

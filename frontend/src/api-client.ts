@@ -10,8 +10,9 @@ import type {
   GuestAuthResponse,
   GuestShareData,
   ManualExamInput,
-  Medication,
-  MedicationInput,
+  MedicationCreateInput,
+  MedicationUse,
+  MedicationUseUpdateInput,
   ProviderCredentialStatus,
   ProviderId,
   ShareCreated,
@@ -230,7 +231,6 @@ export const api = {
       title?: string;
       date_performed?: string;
       laboratory?: string | null;
-      color?: string | null;
     },
   ): Promise<Exam> {
     return request(`/api/exams/${id}`, {
@@ -250,29 +250,29 @@ export const api = {
     return request(`/api/exams/${id}`, { method: "DELETE" });
   },
 
-  listMedications(): Promise<Medication[]> {
+  listMedications(): Promise<MedicationUse[]> {
     return request("/api/medications");
   },
 
-  updateMedication(
+  updateMedicationUse(
     id: number,
-    input: Partial<MedicationInput>,
-  ): Promise<Medication> {
-    return request(`/api/medications/${id}`, {
+    input: MedicationUseUpdateInput,
+  ): Promise<MedicationUse> {
+    return request(`/api/medications/uses/${id}`, {
       method: "PATCH",
       body: JSON.stringify(input),
     });
   },
 
-  createMedication(input: MedicationInput): Promise<Medication> {
+  createMedication(input: MedicationCreateInput): Promise<MedicationUse[]> {
     return request("/api/medications", {
       method: "POST",
       body: JSON.stringify(input),
     });
   },
 
-  deleteMedication(id: number): Promise<{ deleted: number }> {
-    return request(`/api/medications/${id}`, { method: "DELETE" });
+  deleteMedicationUse(id: number): Promise<{ deleted: number }> {
+    return request(`/api/medications/uses/${id}`, { method: "DELETE" });
   },
 
   createSymptom(input: SymptomCreateInput): Promise<SymptomOccurrence[]> {

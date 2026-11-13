@@ -117,7 +117,13 @@ function SharePage() {
   const medication_items: SelectionItem[] = medications.map((medication) => ({
     id: medication.id,
     label: medication.name,
-    hint: `${medication.dosage} · ${medication.frequency_per_day}x per day`,
+    hint: `${medication.dosage} · ${medication.frequency_per_day}x per day · ${formatDate(
+      medication.start_date,
+    )} ${
+      medication.end_date
+        ? `– ${formatDate(medication.end_date)}`
+        : "– ongoing"
+    }`,
   }));
 
   function toggleSelection(
@@ -168,7 +174,7 @@ function SharePage() {
     try {
       const result = await api.createShare({
         exam_ids: [...selected_exams],
-        medication_ids: [...selected_medications],
+        medication_use_ids: [...selected_medications],
         symptom_occurrence_ids: [...selected_symptoms],
         expires_in_days,
       });
@@ -189,7 +195,7 @@ function SharePage() {
     try {
       const result = await api.createShare({
         exam_ids: group.exam_ids,
-        medication_ids: group.medication_ids,
+        medication_use_ids: group.medication_use_ids,
         symptom_occurrence_ids: group.symptom_occurrence_ids,
         expires_in_days,
       });
@@ -319,7 +325,7 @@ function SharePage() {
         />
         <SelectionCard
           title="Medications"
-          unit="medication"
+          unit="use"
           items={medication_items}
           selected={selected_medications}
           all_selected={all_medications_selected}

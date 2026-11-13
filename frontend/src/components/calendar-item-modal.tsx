@@ -254,22 +254,16 @@ export function CalendarItemModal({
               {item.medication.frequency_per_day} per day
             </dd>
           </div>
-          <div>
+          <div className="col-span-2">
             <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Starts
+              Dates
             </dt>
             <dd className="mt-1 text-gray-900 dark:text-white">
-              {formatDate(item.medication.start_date)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Ends
-            </dt>
-            <dd className="mt-1 text-gray-900 dark:text-white">
-              {item.medication.end_date
-                ? formatDate(item.medication.end_date)
-                : "Ongoing"}
+              {item.medication.end_date === null
+                ? `${formatDate(item.medication.start_date)} — Ongoing`
+                : item.medication.end_date === item.medication.start_date
+                  ? formatDate(item.medication.start_date)
+                  : `${formatDate(item.medication.start_date)} — ${formatDate(item.medication.end_date)}`}
             </dd>
           </div>
         </dl>

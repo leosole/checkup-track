@@ -42,10 +42,11 @@ The API decrypts keys at runtime, so the hosting operator remains trusted.
 | POST | `/api/exams/upload` | JWT | Upload a lab-report PDF (parse → extract → insert) |
 | GET | `/api/exams` | JWT | List exams with biomarkers |
 | GET | `/api/exams/search?q=` | JWT | Global text search over exams/biomarkers |
-| POST | `/api/medications` | JWT | Add a medication |
-| GET | `/api/medications` | JWT | List medications |
-| DELETE | `/api/medications/{id}` | JWT | Remove a medication |
-| GET | `/api/calendar` | JWT | Exam dates + medication ranges |
+| POST | `/api/medications` | JWT | Add a medication with one or more dated uses |
+| GET | `/api/medications` | JWT | List medication uses |
+| PATCH | `/api/medications/uses/{id}` | JWT | Edit one use |
+| DELETE | `/api/medications/uses/{id}` | JWT | Remove one use |
+| GET | `/api/calendar` | JWT | Exam dates + medication use ranges |
 | GET | `/api/analytics/time-series` | JWT | `?start_date&end_date&specs=A&specs=B` grouped series |
 
 ## Storage layout

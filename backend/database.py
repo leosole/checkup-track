@@ -92,6 +92,98 @@ else:
     )
 
 
+def _migrate_medication_uses() -> None:
+    """Move per-medication prescription data onto dated ``medicationuse`` rows.
+
+    Older databases stored dosage, frequency and dates directly on
+    ``medication``. Each legacy row becomes one use with the same id, so
+    existing share links keep pointing at the right course. Runs once; the
+    column check makes it idempotent.
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "medication" not in tables:
+        return
+    legacy_columns = {"dosage", "frequency_per_day", "start_date"} <= {
+        item["name"] for item in inspector.get_columns("medication")
+    }
+    if not legacy_columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO medicationuse "
+                "(id, medication_id, dosage, frequency_per_day, start_date, end_date) "
+                "SELECT m.id, m.id, m.dosage, m.frequency_per_day, m.start_date, "
+                "m.end_date FROM medication m WHERE NOT EXISTS ("
+                "SELECT 1 FROM medicationuse u WHERE u.medication_id = m.id)"
+            )
+        )
+        if IS_POSTGRES:
+            # Explicit ids were copied, so advance the sequence past them.
+            connection.execute(
+                text(
+                    "SELECT setval("
+                    "pg_get_serial_sequence('medicationuse', 'id'), "
+                    "COALESCE((SELECT MAX(id) FROM medicationuse), 1))"
+                )
+            )
+
+    # Share links now reference a use instead of a medication.
+    if "sharemedication" in tables:
+        share_columns = {
+            item["name"] for item in inspector.get_columns("sharemedication")
+        }
+        if "medication_use_id" not in share_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE sharemedication RENAME TO sharemedication_legacy")
+                )
+            SQLModel.metadata.create_all(engine)
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO sharemedication (share_id, medication_use_id) "
+                        "SELECT share_id, medication_id FROM sharemedication_legacy"
+                    )
+                )
+                connection.execute(text("DROP TABLE sharemedication_legacy"))
+
+    # Drop the legacy columns; only the NOT NULL ones must go for new inserts.
+    if IS_POSTGRES:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE medication "
+                    "DROP COLUMN IF EXISTS dosage, "
+                    "DROP COLUMN IF EXISTS frequency_per_day, "
+                    "DROP COLUMN IF EXISTS start_date, "
+                    "DROP COLUMN IF EXISTS end_date, "
+                    "DROP COLUMN IF EXISTS color"
+                )
+            )
+        return
+
+    # SQLite cannot drop columns on older versions, so rebuild the table.
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE medication_new ("
+                "id INTEGER NOT NULL PRIMARY KEY, "
+                "user_id VARCHAR NOT NULL, name VARCHAR NOT NULL)"
+            )
+        )
+        connection.execute(
+            text("INSERT INTO medication_new (id, user_id, name) SELECT id, user_id, name FROM medication")
+        )
+        connection.execute(text("DROP TABLE medication"))
+        connection.execute(text("ALTER TABLE medication_new RENAME TO medication"))
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_medication_user_id ON medication (user_id)")
+        )
+
+
 def init_db() -> None:
     """Create database tables (idempotent, safe on every cold start)."""
     # Import models so they register on the SQLModel metadata before create_all.
@@ -100,6 +192,7 @@ def init_db() -> None:
         ExamBiomarker,
         ExamProcessingJob,
         Medication,
+        MedicationUse,
         ShareExam,
         ShareGrant,
         ShareMedication,
@@ -116,8 +209,6 @@ def init_db() -> None:
     new_columns = (
         ("examprocessingjob", "requested_date", "DATE"),
         ("exam", "laboratory", "VARCHAR(200)"),
-        ("exam", "color", "VARCHAR(7)"),
-        ("medication", "color", "VARCHAR(7)"),
     )
     existing_columns: dict[str, set[str]] = {}
     for table, column, column_type in new_columns:
@@ -138,6 +229,8 @@ def init_db() -> None:
                 item["name"] for item in inspect(engine).get_columns(table)
             }:
                 raise
+
+    _migrate_medication_uses()
 
 
 def get_session() -> Iterator[Session]:

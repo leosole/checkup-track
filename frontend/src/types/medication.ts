@@ -1,18 +1,29 @@
-export interface Medication {
+export interface MedicationUse {
   id: number;
+  medication_id: number;
   name: string;
   dosage: string;
   frequency_per_day: number;
   start_date: string;
   end_date: string | null;
-  color: string | null;
 }
 
-export interface MedicationInput {
-  medication_name: string;
-  dosage: string;
-  frequency_per_day: number;
+export interface MedicationUseInput {
   start_date: string;
   end_date: string | null;
-  color?: string | null;
+  dosage: string;
+  frequency_per_day: number;
+}
+
+export interface MedicationCreateInput {
+  medication_name: string;
+  uses: MedicationUseInput[];
+}
+
+export interface MedicationUseUpdateInput {
+  medication_name?: string;
+  dosage?: string;
+  frequency_per_day?: number;
+  start_date?: string;
+  end_date?: string | null;
 }

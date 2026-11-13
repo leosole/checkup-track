@@ -1,5 +1,4 @@
 import type { Biomarker } from "./exam";
-import type { Medication } from "./medication";
 
 export type ShareStatus = "active" | "used" | "expired" | "revoked";
 
@@ -23,6 +22,9 @@ export interface SharedMedicationSummary {
   id: number;
   name: string;
   dosage: string;
+  frequency_per_day: number;
+  start_date: string;
+  end_date: string | null;
 }
 
 export interface SharedSymptomOccurrence {
@@ -41,7 +43,7 @@ export interface ShareGroup {
   group_key: string;
   title: string | null;
   exam_ids: number[];
-  medication_ids: number[];
+  medication_use_ids: number[];
   symptom_occurrence_ids: number[];
   exams: SharedExamSummary[];
   medications: SharedMedicationSummary[];
@@ -59,7 +61,7 @@ export interface ShareCreated {
 
 export interface ShareInput {
   exam_ids: number[];
-  medication_ids: number[];
+  medication_use_ids: number[];
   symptom_occurrence_ids?: number[];
   expires_in_days?: number;
 }
@@ -92,10 +94,24 @@ export interface GuestSymptom {
   occurrences: GuestSymptomOccurrence[];
 }
 
+export interface GuestMedicationUse {
+  id: number;
+  dosage: string;
+  frequency_per_day: number;
+  start_date: string;
+  end_date: string | null;
+}
+
+export interface GuestMedication {
+  id: number;
+  name: string;
+  uses: GuestMedicationUse[];
+}
+
 export interface GuestShareData {
   share: GuestShareInfo;
   exams: GuestExam[];
-  medications: Medication[];
+  medications: GuestMedication[];
   symptoms: GuestSymptom[];
 }
 

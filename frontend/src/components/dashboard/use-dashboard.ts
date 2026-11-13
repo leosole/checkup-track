@@ -9,7 +9,7 @@ import { api } from "../../api-client";
 import type {
   CalendarData,
   Exam,
-  Medication,
+  MedicationUse,
   SymptomOccurrence,
   User,
 } from "../../types";
@@ -24,7 +24,7 @@ import type { DashboardRoute } from "./types";
 /** All data, dialog and derived state behind the dashboard layout. */
 export function useDashboard(route: DashboardRoute, user: User | null) {
   const [exams, set_exams] = useState<Exam[]>([]);
-  const [medications, set_medications] = useState<Medication[]>([]);
+  const [medications, set_medications] = useState<MedicationUse[]>([]);
   const [calendar_item, set_calendar_item] = useState<CalendarSelection | null>(
     null,
   );
@@ -51,7 +51,7 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
   );
   const [retry_error, _set_retry_error] = useState<string | null>(null);
   const [modal_open, set_modal_open] = useState(false);
-  const [editing_med, set_editing_med] = useState<Medication | null>(null);
+  const [editing_med, set_editing_med] = useState<MedicationUse | null>(null);
   const [symptom_modal_open, set_symptom_modal_open] = useState(false);
   const [editing_symptom, set_editing_symptom] =
     useState<SymptomOccurrence | null>(null);
@@ -107,7 +107,6 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
                 id: exam.id,
                 title: exam.title,
                 date: exam.date_performed,
-                color: exam.color,
               })),
             }));
           }
@@ -273,16 +272,14 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
           exams: current.exams.filter((exam) => exam.id !== exam_id),
         }));
       } else if (calendar_item.kind === "medication") {
-        const medication_id = calendar_item.medication.id;
-        await api.deleteMedication(medication_id);
+        const use_id = calendar_item.medication.id;
+        await api.deleteMedicationUse(use_id);
         set_medications((current) =>
-          current.filter((medication) => medication.id !== medication_id),
+          current.filter((medication) => medication.id !== use_id),
         );
         set_calendar((current) => ({
           ...current,
-          medications: current.medications.filter(
-            (med) => med.id !== medication_id,
-          ),
+          medications: current.medications.filter((med) => med.id !== use_id),
         }));
       } else {
         const occurrence_id = calendar_item.symptom.id;
@@ -373,12 +370,16 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
     }
   }
 
-  async function deleteMedication(medication: Medication) {
+  async function deleteMedication(medication: MedicationUse) {
     if (!user?.capabilities.delete_records) return;
-    if (!window.confirm(`Delete "${medication.name}"? This cannot be undone.`))
+    if (
+      !window.confirm(
+        `Delete this "${medication.name}" course? This cannot be undone.`,
+      )
+    )
       return;
     try {
-      await api.deleteMedication(medication.id);
+      await api.deleteMedicationUse(medication.id);
       set_medications((current) =>
         current.filter((item) => item.id !== medication.id),
       );
@@ -442,6 +443,7 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
   const active_meds = medications.filter(
     (m) => !m.end_date || m.end_date >= new Date().toISOString().slice(0, 10),
   ).length;
+
 
   return {
     route,

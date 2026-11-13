@@ -95,7 +95,8 @@ export function GroupList({
                 ))}
                 {group.medications.map((medication) => (
                   <Badge key={`medication-${medication.id}`} tone="info">
-                    {medication.name} · {medication.dosage}
+                    {medication.name} · {medication.dosage} ·{" "}
+                    {medication.frequency_per_day}x/day
                   </Badge>
                 ))}
                 {group.symptoms.map((symptom) => (

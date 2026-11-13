@@ -4,90 +4,69 @@ import { api } from "../api-client";
 import { useAuth } from "../auth-context";
 import { useDashboardState } from "../components/dashboard/provider";
 import { MedicationModal } from "../components/medication-modal";
+import { medicationNames } from "../components/medication-modal/utils";
 import { MedicationFilters } from "../components/medications/filters";
-import { MedicationTable } from "../components/medications/table";
-import type {
-  MedicationSort,
-  MedicationStatus,
-} from "../components/medications/types";
+import { MedicationList } from "../components/medications/list";
+import type { MedicationStatus } from "../components/medications/types";
+import { groupMedications, isOngoing } from "../components/medications/utils";
 import { EmptyState, Spinner } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { notify } from "../components/ui/toast";
-import { toggleSort } from "../sort-utils";
-import type { Medication } from "../types";
+import type { MedicationUse } from "../types";
 
 function MedicationsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const dash = useDashboardState();
-  const medications = dash.medications;
+  const uses = dash.medications;
   const [query, set_query] = useState("");
   const [status, set_status] = useState<MedicationStatus>("all");
-  const [start_from, set_start_from] = useState("");
-  const [start_to, set_start_to] = useState("");
-  const [sort, set_sort] = useState<MedicationSort>({
-    field: "start_date",
-    direction: "desc",
-  });
-  const [editing_med, set_editing_med] = useState<Medication | null>(null);
+  const [editing_use, set_editing_use] = useState<MedicationUse | null>(null);
   const [modal_open, set_modal_open] = useState(false);
-  const [deleting_id, set_deleting_id] = useState<number | null>(null);
   const [error, set_error] = useState<string | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
-
-  function isActive(medication: Medication) {
-    return (
-      medication.start_date <= today &&
-      (!medication.end_date || medication.end_date >= today)
-    );
-  }
 
   const normalized_query = query.trim().toLowerCase();
-  const visible_medications = medications
-    .filter((medication) => {
-      const active = isActive(medication);
-      return (
-        (!normalized_query ||
-          medication.name.toLowerCase().includes(normalized_query) ||
-          medication.dosage.toLowerCase().includes(normalized_query)) &&
-        (status === "all" || (status === "active") === active) &&
-        (!start_from || medication.start_date >= start_from) &&
-        (!start_to || medication.start_date <= start_to)
-      );
-    })
-    .sort((left, right) => {
-      const factor = sort.direction === "asc" ? 1 : -1;
-      if (sort.field === "name") {
-        return factor * left.name.localeCompare(right.name);
-      }
-      return factor * left.start_date.localeCompare(right.start_date);
-    });
+  const groups = groupMedications(uses)
+    .map((group) => ({
+      ...group,
+      uses: group.uses.filter(
+        (use) =>
+          (status === "all" || (status === "ongoing") === isOngoing(use)) &&
+          (!normalized_query ||
+            group.name.toLowerCase().includes(normalized_query) ||
+            use.dosage.toLowerCase().includes(normalized_query)),
+      ),
+    }))
+    .filter((group) => group.uses.length > 0);
+  const visible_count = groups.reduce(
+    (sum, group) => sum + group.uses.length,
+    0,
+  );
 
-  async function deleteMedication(medication: Medication) {
+  async function deleteUse(use: MedicationUse) {
     if (!user?.capabilities.delete_records) return;
     if (
-      !window.confirm(`Delete "${medication.name}"? This cannot be undone.`)
+      !window.confirm(
+        `Delete this "${use.name}" use? This cannot be undone.`,
+      )
     ) {
       return;
     }
-    set_deleting_id(medication.id);
     set_error(null);
     try {
-      await api.deleteMedication(medication.id);
+      await api.deleteMedicationUse(use.id);
       await dash.refresh();
-      notify.success(`“${medication.name}” deleted.`);
+      notify.success(`“${use.name}” use deleted.`);
     } catch (err) {
       set_error(
-        err instanceof Error ? err.message : "Could not delete the medication.",
+        err instanceof Error ? err.message : "Could not delete the use.",
       );
-    } finally {
-      set_deleting_id(null);
     }
   }
 
-  function openMedication(medication: Medication | null) {
-    if (!medication && !user?.capabilities.create_records) return;
-    set_editing_med(medication);
+  function openUse(use: MedicationUse | null) {
+    if (!use && !user?.capabilities.create_records) return;
+    set_editing_use(use);
     set_modal_open(true);
   }
 
@@ -126,15 +105,14 @@ function MedicationsPage() {
                   All medications
                 </h1>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {medications.length} medication
-                  {medications.length === 1 ? "" : "s"} on file
+                  {uses.length} use{uses.length === 1 ? "" : "s"} on file
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Button
                 disabled={!user?.capabilities.create_records}
-                onClick={() => openMedication(null)}
+                onClick={() => openUse(null)}
               >
                 Add medication
               </Button>
@@ -144,12 +122,8 @@ function MedicationsPage() {
           <MedicationFilters
             query={query}
             status={status}
-            start_from={start_from}
-            start_to={start_to}
             on_query_change={set_query}
             on_status_change={set_status}
-            on_start_from_change={set_start_from}
-            on_start_to_change={set_start_to}
           />
 
           {error && (
@@ -165,53 +139,41 @@ function MedicationsPage() {
             className="mb-2 text-xs text-gray-500 dark:text-gray-400"
             aria-live="polite"
           >
-            Showing {visible_medications.length} of {medications.length}
+            Showing {visible_count} of {uses.length}
           </p>
-          {visible_medications.length === 0 ? (
+          {visible_count === 0 ? (
             <EmptyState
               title={
-                medications.length === 0
+                uses.length === 0
                   ? "No medications tracked"
                   : "No medications match these filters"
               }
               hint={
-                medications.length === 0
-                  ? "Add a regimen to see it in the calendar."
+                uses.length === 0
+                  ? "Add a medication to see its uses in the calendar."
                   : undefined
               }
             />
           ) : (
-            <MedicationTable
-              medications={visible_medications}
+            <MedicationList
+              groups={groups}
+              can_edit={Boolean(user?.capabilities.edit_medications)}
               can_delete={Boolean(user?.capabilities.delete_records)}
-              deleting_id={deleting_id}
-              isActive={isActive}
-              sort={sort}
-              on_sort_change={(field) =>
-                set_sort((current) => toggleSort(current, field))
-              }
-              on_edited_medication={(medicationId: number) => {
-                const medication = medications.find(
-                  (item) => item.id === medicationId,
-                );
-                if (medication) openMedication(medication);
-              }}
-              on_deleted_medication={(id: number) => {
-                const medication = medications.find((item) => item.id === id);
-                if (medication) void deleteMedication(medication);
-              }}
+              on_edit={openUse}
+              on_delete={(use) => void deleteUse(use)}
             />
           )}
 
           <MedicationModal
             open={
               modal_open &&
-              (editing_med !== null || Boolean(user?.capabilities.create_records))
+              (editing_use !== null || Boolean(user?.capabilities.create_records))
             }
-            med={editing_med}
-            onClose={() => {
+            use={editing_use}
+            names={medicationNames(uses)}
+            on_close={() => {
               set_modal_open(false);
-              set_editing_med(null);
+              set_editing_use(null);
             }}
             on_saved={() => void dash.refresh()}
           />

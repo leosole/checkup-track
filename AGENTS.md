@@ -179,11 +179,13 @@ JWT: `GET /api/auth/me`; `GET /api/profile/providers`,
 `PUT /api/profile/providers/order`; `POST /api/exams/upload` (multipart `file` + optional
 `title`, ≤ 25 MB); `GET /api/exams`; `PATCH /api/exams/{id}` (rename / change date);
 `GET /api/exams/{id}/pdf` (streams the stored PDF); `GET /api/exams/search?q=`;
-`POST|GET /api/medications`, `PATCH|DELETE /api/medications/{id}`;
+`POST|GET /api/medications` (JSON: `medication_name` + `uses[]` with dosage,
+frequency and dates), `PATCH|DELETE /api/medications/uses/{id}`;
 `POST /api/symptoms` (JSON: `title` + `dates[]` occurrences),
 `PATCH|DELETE /api/symptoms/occurrences/{id}`; `GET /api/calendar`;
 `POST /api/shares` accepts `symptom_occurrence_ids` alongside
-`exam_ids`/`medication_ids`, and guests get symptoms nested under their title;
+`exam_ids`/`medication_use_ids`, and guests get symptoms and medication uses
+nested under their title;
 `GET /api/analytics/time-series?specs=Glucose&specs=Hemoglobin&start_date=&end_date=`.
 Sharing: `POST|GET /api/shares`, `PATCH /api/shares/groups` (name or rename a
 share group; an empty title clears it), `DELETE /api/shares/{id}` (revoke).
@@ -203,7 +205,7 @@ reuses. Identical selections are one group; changing the selection makes a new o
 
 Before calling work done:
 
-1. `cd backend && .venv/bin/python -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, shareexam, sharegrant, sharegrouptitle, sharemedication, sharesymptom, symptom, symptomoccurrence, user, userprovidercredential`.
+1. `cd backend && .venv/bin/python -c "import main, parser, auth, database, models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"` — must list `exam, exambiomarker, medication, medicationuse, shareexam, sharegrant, sharegrouptitle, sharemedication, sharesymptom, symptom, symptomoccurrence, user, userprovidercredential`.
 2. `npm --prefix frontend run typecheck` (and `build` when touching UI).
 3. Smoke the changed endpoints against a running backend. Use a throwaway DB
    (e.g. `DATABASE_URL=sqlite:////tmp/smoke.db`) so you never pollute `backend/health.db`.
@@ -219,6 +221,6 @@ Before calling work done:
 - Parsing is LLM-based and non-deterministic; provider models may change and
   failover can send report text to multiple configured providers. Do not assert
   exact extracted values in tests.
-- All dates are plain `date` columns (`Exam.date_performed`, `Medication.start_date`/
+- All dates are plain `date` columns (`Exam.date_performed`, `MedicationUse.start_date`/
   `end_date`) serialized as ISO `YYYY-MM-DD`. Keep new date logic consistent with
   `CalendarExam` and `frontend/src/date-utils.ts`; avoid inventing timestamps.
