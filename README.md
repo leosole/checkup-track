@@ -44,6 +44,20 @@ medications on the same timeline.
 
 A deployed version can be tested on [checkup-track-bzzs.onrender.com](https://checkup-track-bzzs.onrender.com/), logging in as a test user. You won't be able to login with google (only for me atm)
 
+## Screenshots
+
+![Health calendar with exams, medication windows and symptom occurrences on one timeline](screenshots/calendar.png)
+
+Exams, medication periods and symptom occurrences on a single month timeline.
+
+![Biomarker trends plotting Hemoglobin over time, with the marker picker filtered by search](screenshots/plot.png)
+
+Plot any number of markers over time; search the marker picker to add or remove series.
+
+![Sharing: pick exams, medications and individual symptom occurrences, create a one-time code, and see previously shared groups](screenshots/share.png)
+
+Selections are shared as single-use, expiring codes; previously shared groups are listed with their history so the same selection can be shared again.
+
 ## Repository layout
 
 ```
