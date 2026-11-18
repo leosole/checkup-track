@@ -84,7 +84,7 @@ export function CalendarGrid({ data, onClick }: CalendarGridProps) {
               type="checkbox"
               checked={show_exams}
               onChange={(event) => set_show_exams(event.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
+              className="h-4 w-4 rounded-sm border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
             />
             Exams
           </label>
@@ -93,7 +93,7 @@ export function CalendarGrid({ data, onClick }: CalendarGridProps) {
               type="checkbox"
               checked={show_medications}
               onChange={(event) => set_show_medications(event.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
+              className="h-4 w-4 rounded-sm border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
             />
             Medications
           </label>
@@ -102,7 +102,7 @@ export function CalendarGrid({ data, onClick }: CalendarGridProps) {
               type="checkbox"
               checked={show_symptoms}
               onChange={(event) => set_show_symptoms(event.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
+              className="h-4 w-4 rounded-sm border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
             />
             Symptoms
           </label>
@@ -120,7 +120,7 @@ export function CalendarGrid({ data, onClick }: CalendarGridProps) {
               />
             </svg>
           </button>
-          <span className="min-w-[10.5rem] text-center text-sm font-semibold text-gray-900 dark:text-white">
+          <span className="min-w-42 text-center text-sm font-semibold text-gray-900 dark:text-white">
             {formatMonthLabel(cursor)}
           </span>
           <button

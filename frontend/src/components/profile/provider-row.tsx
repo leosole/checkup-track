@@ -68,7 +68,7 @@ export function ProviderRow({
                 ? "Enter a new key to replace"
                 : "Paste API key"
             }
-            className="w-full rounded-lg border-0 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-950 dark:text-gray-100 dark:ring-gray-700 dark:placeholder:text-gray-500"
+            className="w-full rounded-lg border-0 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-950 dark:text-gray-100 dark:ring-gray-700 dark:placeholder:text-gray-500"
           />
         </label>
         <Button

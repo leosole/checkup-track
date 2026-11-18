@@ -18,7 +18,7 @@ export function RangeLanes({ lanes, on_select }: RangeLanesProps) {
             onClick={() => on_select({ kind: bar.kind, id: bar.item_id })}
             title={bar.title}
             aria-label={`${bar.label}, ${bar.kind} details`}
-            className="absolute flex h-4 items-center gap-1 overflow-hidden rounded-full px-1.5 text-[10px] font-semibold text-white shadow-sm"
+            className="absolute flex h-4 items-center gap-1 overflow-hidden rounded-full px-1.5 text-[10px] font-semibold text-white shadow-xs"
             style={{
               backgroundColor: bar.color,
               top: lane_index * LANE_HEIGHT + 4,

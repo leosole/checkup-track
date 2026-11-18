@@ -77,7 +77,7 @@ export function ExamTable({
                   <button
                     type="button"
                     onClick={() => on_select_exam(exam)}
-                    className="block max-w-full truncate text-left hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:hover:text-brand-300"
+                    className="block max-w-full truncate text-left hover:text-brand-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:hover:text-brand-300"
                     aria-label={`View details for ${exam.title}`}
                   >
                     {exam.title}

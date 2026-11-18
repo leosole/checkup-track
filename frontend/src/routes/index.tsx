@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { HiMiniShare } from "react-icons/hi2";
 import { useAuth } from "../auth-context";
 import { AnalyticsChart } from "../components/analytics-chart";
 import { CalendarGrid } from "../components/calendar-grid";
@@ -6,8 +7,8 @@ import { DashboardExamList } from "../components/dashboard/exam-list";
 import { DashboardMedicationSummary } from "../components/dashboard/medication-summary";
 import { DashboardSymptomSummary } from "../components/dashboard/symptom-summary";
 import { useDashboardState } from "../components/dashboard/provider";
+import { DashboardQuickActions } from "../components/dashboard/quick-actions";
 import { StatCard } from "../components/dashboard/stat-card";
-import { Button } from "../components/ui/button";
 
 function DashboardPage() {
   const { user } = useAuth();
@@ -26,36 +27,16 @@ function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          disabled={!user?.capabilities.create_records}
-          onClick={() => dash.set_upload_exam_open(true)}
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          aria-label="Share data"
+          title="Share data"
+          onClick={() => void navigate({ to: "/share" })}
+          className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-gray-600 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 hover:text-gray-900 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-gray-800 dark:hover:text-white"
         >
-          Upload exam
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={!user?.capabilities.create_records}
-          onClick={() => {
-            dash.set_editing_med(null);
-            dash.set_modal_open(true);
-          }}
-        >
-          Add medication
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={!user?.capabilities.create_records}
-          onClick={() => {
-            dash.set_editing_symptom(null);
-            dash.set_symptom_modal_open(true);
-          }}
-        >
-          Log symptom
-        </Button>
-        <Button variant="secondary" onClick={() => void navigate({ to: "/share" })}>
-          Share data
-        </Button>
+          <HiMiniShare className="h-5 w-5" aria-hidden="true" />
+        </button>
       </div>
 
       {load_error && (
@@ -119,6 +100,19 @@ function DashboardPage() {
       <DashboardMedicationSummary />
 
       <DashboardSymptomSummary />
+
+      <DashboardQuickActions
+        can_create_records={Boolean(user?.capabilities.create_records)}
+        on_upload_exam={() => dash.set_upload_exam_open(true)}
+        on_add_medication={() => {
+          dash.set_editing_med(null);
+          dash.set_modal_open(true);
+        }}
+        on_log_symptom={() => {
+          dash.set_editing_symptom(null);
+          dash.set_symptom_modal_open(true);
+        }}
+      />
     </main>
   );
 }

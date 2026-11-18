@@ -304,7 +304,7 @@ export function DashboardExamList() {
                 </div>
 
                 <details className="mt-3 [&[open]>summary>svg]:rotate-180">
-                  <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-gray-500 marker:hidden hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 dark:text-gray-400 dark:hover:text-gray-200 [&::-webkit-details-marker]:hidden">
+                  <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-gray-500 marker:hidden hover:text-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-600 dark:text-gray-400 dark:hover:text-gray-200 [&::-webkit-details-marker]:hidden">
                     Results ({exam.biomarkers.length})
                     <svg
                       className="h-3.5 w-3.5 transition-transform"
@@ -358,7 +358,7 @@ export function DashboardExamList() {
                               : "Add to trend plot"
                           }`}
                           className={[
-                            "group/marker relative inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600",
+                            "group/marker relative inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-600",
                             plotted
                               ? "bg-brand-50 text-brand-700 ring-brand-400 dark:bg-brand-500/15 dark:text-brand-200 dark:ring-brand-500/50"
                               : biomarker.is_abnormal

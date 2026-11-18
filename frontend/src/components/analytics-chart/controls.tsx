@@ -45,14 +45,14 @@ export function AnalyticsChartControls({
                     )}
                     onChange={() => on_toggle_merge_selection(spec)}
                     aria-label={`Select ${spec} to merge`}
-                    className="h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
+                    className="h-3.5 w-3.5 shrink-0 rounded-sm border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-900"
                   />
                   <span
                     className="h-2 w-2 shrink-0 rounded-full"
                     style={{ background: color_of(index) }}
                     aria-hidden="true"
                   />
-                  <span className="max-w-[14rem] truncate">{spec}</span>
+                  <span className="max-w-56 truncate">{spec}</span>
                   {unit && (
                     <span className="shrink-0 text-gray-400 dark:text-gray-500">
                       ({unit})
@@ -63,7 +63,7 @@ export function AnalyticsChartControls({
                     onClick={() => on_toggle_spec(spec)}
                     aria-label={`Remove ${spec} from trends`}
                     title={`Remove ${spec}`}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-white"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-600 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-white"
                   >
                     <svg
                       className="h-3.5 w-3.5"

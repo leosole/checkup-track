@@ -64,7 +64,7 @@ export function SignIn() {
       });
 
       google.accounts.id.renderButton(button_ref.current, {
-        theme: "outline",
+        theme: "outline-solid",
         size: "large",
         width: 320,
         text: "signin_with",
@@ -84,11 +84,11 @@ export function SignIn() {
   }, [loading, google_client_id, signInWithCredential]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-brand-50/40 to-gray-100 px-4 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-gray-50 via-brand-50/40 to-gray-100 px-4 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <div className="w-full max-w-md">
         <div className="rounded-2xl bg-white p-8 shadow-untitled-lg ring-1 ring-gray-900/5 dark:bg-gray-900 dark:shadow-none dark:ring-white/10">
           <div className="flex flex-col items-center text-center">
-            <Logo className="h-12 w-12 rounded-2xl shadow-sm" />
+            <Logo className="h-12 w-12 rounded-2xl shadow-xs" />
             <h1 className="mt-5 text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
               Welcome to CheckUpTrack
             </h1>
@@ -113,7 +113,7 @@ export function SignIn() {
                 </p>
                 <p className="mt-1">
                   Set{" "}
-                  <code className="rounded bg-amber-100 px-1 dark:bg-amber-500/20">
+                  <code className="rounded-sm bg-amber-100 px-1 dark:bg-amber-500/20">
                     GOOGLE_CLIENT_ID
                   </code>{" "}
                   in the backend environment, then restart.

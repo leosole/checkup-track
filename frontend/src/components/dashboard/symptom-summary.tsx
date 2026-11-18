@@ -21,7 +21,6 @@ export function DashboardSymptomSummary() {
             Recent symptoms
           </h2>
           <Button
-            variant="secondary"
             size="sm"
             disabled={!user?.capabilities.create_records}
             onClick={() => {

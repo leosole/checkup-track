@@ -103,10 +103,14 @@ network-heavy steps to CI.
   `analytics-chart.tsx`). UI primitives live in `components/ui/`; feature
   components sit directly in `components/`. Keep components small and read
   data through `api-client.ts`.
-- **Styling**: Tailwind with the project's own tokens (`index.css` CSS vars,
-  `tailwind.config.ts` brand palette). Reuse existing UI primitives and the
-  Untitled-UI-ish spacing/shadow styles instead of inventing a new look. Do not
-  remove the Tailwind directives, theme variables, or body styles.
+- **Styling**: Tailwind CSS v4, configured entirely in `frontend/src/index.css`
+  (`@theme` brand palette and `--shadow-untitled*`, plus the CSS vars) — there is
+  no `tailwind.config.*`. That file must also keep the cascade order
+  `@layer ui-sdk;` → `@import "tailwindcss";` →
+  `@import "@ui-sdk/core/web.css" layer(components);` and the class-based
+  `@custom-variant dark`. Reuse existing UI primitives and the Untitled-UI-ish
+  spacing/shadow styles instead of inventing a new look. Do not remove the theme
+  variables or body styles.
 - **`vite.config.ts`** has a dev proxy to 8000 and HMR enabled by default; set
   `VITE_NO_HMR=1` when serving through a proxy that cannot upgrade the HMR
   websocket. Leave the proxy targets alone.
@@ -116,6 +120,14 @@ network-heavy steps to CI.
   `.env.local` to bypass unauthenticated git; they have been removed. Do not
   reintroduce askpass/token-wrapper scripts or read `.env.local` for a
   credential.
+
+## ui-sdk components
+
+Before using ui-sdk (imported from `@ui-sdk/react/<component>`), follow the
+ui-sdk skill if it's installed, and read
+`node_modules/@ui-sdk/react/docs/llms.txt`. To build a new component, also search
+`node_modules/@ui-sdk/react/docs/core.md` by heading, and read `rendering.md`
+next to it.
 
 ## Frontend file structure
 

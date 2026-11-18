@@ -222,7 +222,7 @@ export function AnalyticsChartPlot({
             />
             {tooltip.series}
             {tooltip.is_abnormal && (
-              <span className="ml-auto rounded bg-rose-500 px-1 text-[10px] font-bold">
+              <span className="ml-auto rounded-sm bg-rose-500 px-1 text-[10px] font-bold">
                 ABNORMAL
               </span>
             )}

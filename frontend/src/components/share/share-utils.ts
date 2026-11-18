@@ -8,11 +8,11 @@ export const STATUS_TONES = {
 } as const;
 
 export const SELECT_CLASS =
-  "w-full rounded-lg border-0 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm ring-1 ring-inset " +
+  "w-full rounded-lg border-0 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs ring-1 ring-inset " +
   "ring-gray-300 focus:ring-2 focus:ring-brand-600 dark:bg-gray-900 dark:text-gray-100 dark:ring-gray-700";
 
 export const CHECKBOX_CLASS =
-  "h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-600 " +
+  "h-4 w-4 shrink-0 rounded-sm border-gray-300 text-brand-600 focus:ring-brand-600 " +
   "dark:border-gray-600 dark:bg-gray-800";
 
 export function guestUrl(): string {

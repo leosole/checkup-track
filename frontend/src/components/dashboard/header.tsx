@@ -11,7 +11,7 @@ export function DashboardHeader({
 }: DashboardHeaderProps) {
   const navigate = useNavigate();
   return (
-    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
+    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/90">
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <button
           type="button"
@@ -19,7 +19,7 @@ export function DashboardHeader({
           onClick={() => void navigate({ to: "/" })}
           className="flex shrink-0 items-center gap-2.5 text-left"
         >
-          <Logo className="h-9 w-9 shrink-0 rounded-xl shadow-sm" />
+          <Logo className="h-9 w-9 shrink-0 rounded-xl shadow-xs" />
           <div className="leading-tight">
             <p className="text-sm font-semibold text-gray-900 dark:text-white">
               CheckUpTrack

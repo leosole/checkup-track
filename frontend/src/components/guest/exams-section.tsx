@@ -50,7 +50,7 @@ export function ExamsSection({
                     onClick={() => toggleExam(exam.id)}
                     aria-expanded={expanded}
                     aria-controls={panel_id}
-                    className="flex min-w-0 items-center gap-2 rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
+                    className="flex min-w-0 items-center gap-2 rounded-md text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-600"
                   >
                     <svg
                       className={[
@@ -146,12 +146,12 @@ export function ExamsSection({
                                           ? "Remove from trend plot"
                                           : "Add to trend plot"
                                       }`}
-                                      className="flex w-full items-center gap-2 rounded-md py-0.5 text-left transition hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 dark:hover:text-brand-300"
+                                      className="flex w-full items-center gap-2 rounded-md py-0.5 text-left transition hover:text-brand-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-600 dark:hover:text-brand-300"
                                     >
                                       <span
                                         aria-hidden="true"
                                         className={[
-                                          "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
                                           plotted
                                             ? "border-brand-600 bg-brand-600 text-white dark:border-brand-500 dark:bg-brand-500"
                                             : "border-gray-300 dark:border-gray-600",

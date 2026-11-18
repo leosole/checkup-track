@@ -3,8 +3,8 @@ import type { InputProps } from "./types";
 
 const BASE =
   "block w-full rounded-lg border-0 px-3.5 py-2.5 text-sm text-gray-900 " +
-  "shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 " +
-  "focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-600 transition-shadow " +
+  "shadow-xs ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 " +
+  "focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-brand-600 transition-shadow " +
   "disabled:bg-gray-50 disabled:text-gray-500 " +
   "dark:bg-gray-900 dark:text-gray-100 dark:ring-gray-700 " +
   "dark:placeholder:text-gray-500 dark:disabled:bg-gray-800";

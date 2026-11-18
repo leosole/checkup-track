@@ -27,7 +27,7 @@ export function SortableTh<Field extends string>({
         title={`Sort by ${typeof children === "string" ? children : "this column"}`}
         className={[
           "flex w-full items-center justify-between gap-2 px-4 py-3 text-left uppercase",
-          "transition focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600",
+          "transition focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600",
           active
             ? "text-brand-700 dark:text-brand-300"
             : "text-gray-700 hover:text-brand-700 dark:text-gray-200 dark:hover:text-brand-300",

@@ -136,9 +136,9 @@ function GuestPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/90">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
-          <Logo className="h-9 w-9 shrink-0 rounded-xl shadow-sm" />
+          <Logo className="h-9 w-9 shrink-0 rounded-xl shadow-xs" />
           <div className="leading-tight">
             <p className="text-sm font-semibold text-gray-900 dark:text-white">
               CheckUpTrack

@@ -13,11 +13,11 @@ export function CodeEntry({
   on_submit,
 }: CodeEntryProps) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-brand-50/40 to-gray-100 px-4 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-gray-50 via-brand-50/40 to-gray-100 px-4 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <div className="w-full max-w-md">
         <div className="rounded-2xl bg-white p-8 shadow-untitled-lg ring-1 ring-gray-900/5 dark:bg-gray-900 dark:shadow-none dark:ring-white/10">
           <div className="flex flex-col items-center text-center">
-            <Logo className="h-12 w-12 rounded-2xl shadow-sm" />
+            <Logo className="h-12 w-12 rounded-2xl shadow-xs" />
             <h1 className="mt-5 text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
               View shared records
             </h1>
