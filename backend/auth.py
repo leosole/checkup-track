@@ -71,23 +71,43 @@ def _jwt_secret() -> str:
     return generated
 
 
+def get_google_client_ids() -> list[str]:
+    """Every accepted Google OAuth client ID.
+
+    ``GOOGLE_CLIENT_ID`` is the web client used by the browser app.
+    ``GOOGLE_CLIENT_IDS`` (comma-separated) adds native clients — for example
+    the Android OAuth client the React Native app signs in with — so one
+    backend can verify tokens minted for either platform.
+    """
+    client_ids: list[str] = []
+    for raw in (os.environ.get("GOOGLE_CLIENT_ID", ""), os.environ.get("GOOGLE_CLIENT_IDS", "")):
+        for value in raw.split(","):
+            client_id = value.strip()
+            if client_id and client_id not in client_ids:
+                client_ids.append(client_id)
+    return client_ids
+
+
 def get_google_client_id() -> Optional[str]:
-    client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
-    return client_id or None
+    client_ids = get_google_client_ids()
+    return client_ids[0] if client_ids else None
 
 
 def verify_google_id_token(token: str) -> dict:
     """Validate a Google ID token with google-auth and return its claims."""
-    client_id = get_google_client_id()
-    if not client_id:
+    client_ids = get_google_client_ids()
+    if not client_ids:
         raise AuthConfigError(
             "Google sign-in is not configured on this server. Set GOOGLE_CLIENT_ID."
         )
     claims = google_id_token.verify_oauth2_token(
         token,
         google_requests.Request(),
-        audience=client_id,
+        # The audience is checked below so both the web and native clients work.
+        audience=None,
     )
+    if claims.get("aud") not in client_ids:
+        raise ValueError("Google ID token audience is not an accepted client ID.")
     issuer = claims.get("iss")
     if issuer not in ("https://accounts.google.com", "accounts.google.com"):
         raise HTTPException(

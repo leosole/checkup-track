@@ -89,7 +89,8 @@ network-heavy steps to CI.
   `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` are set, otherwise local
   `backend/storage/`. Both must keep working — dev has no B2 keys. Never assume
   a returned PDF path is a local file; use `local_pdf_path()` / `download_pdf()`.
-- **Auth**: Google ID token verified server-side (audience = `GOOGLE_CLIENT_ID`);
+- **Auth**: Google ID token verified server-side (audience must be
+  `GOOGLE_CLIENT_ID` or one of `GOOGLE_CLIENT_IDS`);
   the app then issues its own HS256 JWT. Protected routes use
   `Depends(get_current_user)`. Frontend stores the token and sends
   `Authorization: Bearer …`. Never move verification to the client.
@@ -151,6 +152,7 @@ These rules apply to every file under `frontend/src/`:
 | --- | --- | --- |
 | `CREDENTIAL_ENCRYPTION_KEY` | encrypting user-owned provider keys at rest | saving keys fails closed; keep the value stable or saved keys become unreadable |
 | `GOOGLE_CLIENT_ID` | sign-in | `/api/auth/config` reports not configured, sign-in disabled |
+| `GOOGLE_CLIENT_IDS` | extra accepted Google client IDs (comma-separated, e.g. the Android client for `mobile/`) | mobile Google sign-in is rejected |
 | `JWT_SECRET` | signing tokens | dev: auto-generated `backend/.jwt_secret`; prod: unstable tokens |
 | `DATABASE_URL` | Postgres in production | falls back to SQLite |
 | `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` | durable PDF storage | local disk (ephemeral in production) |
