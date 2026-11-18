@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { HiChevronDown, HiPlus } from "react-icons/hi2";
 import type { DashboardQuickActionsProps } from "./types";
 
-/**
- * Bottom-right action button that grows into a card holding the record-creation
- * actions, and collapses again from the chevron at the card's bottom-right.
- */
 export function DashboardQuickActions({
   can_create_records,
   on_upload_exam,
@@ -84,8 +79,6 @@ export function DashboardQuickActions({
         </ul>
       </div>
 
-      {/* Same element in both states: full circle with a plus, shrinking into the card's
-          bottom-right corner chevron. */}
       <button
         type="button"
         aria-label={open ? "Collapse actions" : "Add to your record"}
@@ -93,29 +86,36 @@ export function DashboardQuickActions({
         title={open ? "Collapse actions" : "Add to your record"}
         onClick={() => set_open((value) => !value)}
         className={[
-          "absolute flex items-center justify-center rounded-full transition-[width,height,bottom,right,background-color,color] duration-300 ease-in-out motion-reduce:transition-none",
+          "group absolute flex items-center justify-center rounded-full transition-[width,height,bottom,right,background-color,color] duration-300 ease-in-out motion-reduce:transition-none",
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600",
           open
             ? "bottom-2 right-2 h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
             : "bottom-0 right-0 h-14 w-14 text-white hover:bg-brand-700",
         ].join(" ")}
       >
-        <HiPlus
+        <svg
           aria-hidden="true"
-          className={[
-            "absolute h-6 w-6 transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none",
-            open ? "rotate-90 scale-50 opacity-0" : "rotate-0 scale-100 opacity-100",
-          ].join(" ")}
-        />
-        <HiChevronDown
-          aria-hidden="true"
-          className={[
-            "absolute h-5 w-5 transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none",
-            open
-              ? "rotate-0 scale-100 opacity-100 delay-100"
-              : "-rotate-90 scale-50 opacity-0",
-          ].join(" ")}
-        />
+          className="h-6 w-6"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <line
+            x1="6"
+            y1="12"
+            x2="18"
+            y2="12"
+            className="transition-transform duration-200 ease-in-out group-aria-expanded:translate-y-[6px] motion-reduce:transition-none"
+          />
+          <line
+            x1="12"
+            y1="6"
+            x2="12"
+            y2="18"
+            className="transition-transform duration-200 ease-in-out group-aria-expanded:translate-x-[6px] motion-reduce:transition-none"
+          />
+        </svg>
       </button>
     </div>
   );
