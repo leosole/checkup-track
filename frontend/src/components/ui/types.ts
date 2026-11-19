@@ -53,8 +53,14 @@ export interface ModalProps {
   title: string;
   subtitle?: string;
   onClose: () => void;
+  /** Renders a back button before the title, e.g. returning to a previous page. */
+  onBack?: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Extra classes for the dialog panel, e.g. a hand-over exit animation. */
+  panelClassName?: string;
+  /** Changing this remounts the panel so its entry animation replays. */
+  panelKey?: string | number;
 }
 
 export type SortDirection = "asc" | "desc";

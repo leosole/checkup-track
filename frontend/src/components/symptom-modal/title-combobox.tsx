@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Input } from "../ui/input";
+import { usePresence } from "../ui/use-presence";
 import type { TitleComboboxProps } from "./types";
 
 /** Title input that suggests the symptoms already on file. */
 export function TitleCombobox({ value, titles, onChange }: TitleComboboxProps) {
   const [open, set_open] = useState(false);
+  const { show, leaving } = usePresence(open, 120);
   const query = value.trim().toLowerCase();
   const matches = titles
     .filter((title) => !query || title.toLowerCase().includes(query))
@@ -26,8 +28,13 @@ export function TitleCombobox({ value, titles, onChange }: TitleComboboxProps) {
         onFocus={() => set_open(true)}
         onBlur={() => window.setTimeout(() => set_open(false), 120)}
       />
-      {open && (matches.length > 0 || is_new) && (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg bg-white py-1 shadow-untitled-lg ring-1 ring-gray-900/10 dark:bg-gray-900 dark:ring-white/10">
+      {show && (matches.length > 0 || is_new) && (
+        <ul
+          className={[
+            "absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg bg-white py-1 shadow-untitled-lg ring-1 ring-gray-900/10 motion-reduce:animate-none dark:bg-gray-900 dark:ring-white/10",
+            leaving ? "animate-dropdown-out" : "animate-dropdown-in",
+          ].join(" ")}
+        >
           {matches.map((title) => (
             <li key={title}>
               <button

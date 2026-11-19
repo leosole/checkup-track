@@ -73,11 +73,17 @@ export function DashboardDialogs({
       />
       <CalendarItemModal
         item={dash.calendar_item}
+        day={dash.calendar_day}
         error={dash.calendar_item_error}
         busy={dash.calendar_action_busy}
         plot_markers={dash.plot_markers}
         on_toggle_marker={dash.toggleMarker}
-        on_close={() => dash.set_calendar_item(null)}
+        on_back={() => dash.set_calendar_item(null)}
+        on_select_exam={dash.showCalendarExam}
+        on_close={() => {
+          dash.set_calendar_item(null);
+          dash.set_calendar_day(null);
+        }}
         on_edit={dash.editCalendarItem}
         on_delete={() => void dash.deleteCalendarItem()}
         on_download={() => {

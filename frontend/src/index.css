@@ -26,6 +26,106 @@
   --font-sans:
     Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
     Helvetica Neue, Arial, sans-serif;
+
+  /* Calendar month changes: the outgoing month leaves the way the user clicked. */
+  --animate-month-in-right: month-in-right 300ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  --animate-month-in-left: month-in-left 300ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  --animate-month-out-left: month-out-left 300ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  --animate-month-out-right: month-out-right 300ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+
+  /* Dialogs fade up into place; no fill mode so a closing dialog can fade out. */
+  --animate-dialog-in: dialog-in 180ms ease-out;
+  --animate-backdrop-in: backdrop-in 160ms ease-out;
+
+  /* Dropdown panels pop open and shrink away again. */
+  --animate-dropdown-in: dropdown-in 160ms ease-out;
+  --animate-dropdown-out: dropdown-out 120ms ease-in both;
+}
+
+@keyframes month-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes month-in-left {
+  from {
+    transform: translateX(-100%);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes month-out-left {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+@keyframes month-out-right {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    transform: translateY(6px) scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dropdown-in {
+  from {
+    transform: translateY(-4px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes dropdown-out {
+  from {
+    transform: none;
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-4px) scale(0.97);
+    opacity: 0;
+  }
 }
 
 /*

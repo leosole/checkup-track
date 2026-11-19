@@ -1,4 +1,5 @@
 import type { Exam, MedicationUse, SymptomOccurrence } from "../types";
+import type { DayExams } from "./calendar-grid/types";
 
 export interface LogoProps {
   className?: string;
@@ -52,6 +53,8 @@ export type CalendarSelection =
 
 export interface CalendarItemModalProps {
   item: CalendarSelection | null;
+  /** Set while the dialog was opened from a day's exam list. */
+  day: DayExams | null;
   error: string | null;
   busy: boolean;
   retry_error: string | null;
@@ -59,6 +62,9 @@ export interface CalendarItemModalProps {
   plot_markers: string[];
   on_toggle_marker: (name: string) => void;
   on_close: () => void;
+  /** Leave the exam details and show the day's exam list again. */
+  on_back: () => void;
+  on_select_exam: (exam_id: number) => void;
   on_edit: () => void;
   on_delete: () => void;
   on_download: () => void;

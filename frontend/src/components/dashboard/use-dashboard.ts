@@ -19,6 +19,7 @@ import {
   usePlotMarkers,
 } from "../analytics-chart/marker-selection";
 import type { CalendarSelection } from "../calendar-item-modal";
+import type { DayExams } from "../calendar-grid/types";
 import type { DashboardRoute } from "./types";
 
 /** All data, dialog and derived state behind the dashboard layout. */
@@ -28,6 +29,7 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
   const [calendar_item, set_calendar_item] = useState<CalendarSelection | null>(
     null,
   );
+  const [calendar_day, set_calendar_day] = useState<DayExams | null>(null);
   const [calendar_item_error, set_calendar_item_error] = useState<
     string | null
   >(null);
@@ -466,6 +468,8 @@ export function useDashboard(route: DashboardRoute, user: User | null) {
     // dialog state
     calendar_item,
     set_calendar_item,
+    calendar_day,
+    set_calendar_day,
     calendar_item_error,
     calendar_action_busy,
     rename_modal_exam,

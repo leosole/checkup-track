@@ -4,12 +4,14 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Modal } from "./ui/modal";
 import { hasMarker } from "./analytics-chart/marker-selection";
+import { DayExamList } from "./calendar-grid/day-exam-list";
 import type { CalendarItemModalProps } from "./types";
 
 export type { CalendarSelection } from "./types";
 
 export function CalendarItemModal({
   item,
+  day,
   error,
   busy,
   retry_error,
@@ -17,6 +19,8 @@ export function CalendarItemModal({
   plot_markers,
   on_toggle_marker,
   on_close,
+  on_back,
+  on_select_exam,
   on_edit,
   on_delete,
   on_download,
@@ -24,6 +28,21 @@ export function CalendarItemModal({
 }: CalendarItemModalProps) {
   const { user } = useAuth();
   const is_exam = item?.kind === "exam";
+  // The day list is the first page; picking an exam swaps this same dialog to
+  // its details, so the backdrop stays put and only the panel animates.
+  const showing_day = item === null && day !== null;
+  const page_key = item
+    ? `${item.kind}-${
+        item.kind === "exam"
+          ? item.exam.id
+          : item.kind === "medication"
+            ? item.medication.id
+            : item.symptom.id
+      }`
+    : day
+      ? `day-${day.date}`
+      : "empty";
+  const day_count = day?.exams.length ?? 0;
   const title =
     item?.kind === "exam"
       ? item.exam.title
@@ -46,10 +65,16 @@ export function CalendarItemModal({
 
   return (
     <Modal
-      open={item !== null}
-      title={title}
-      subtitle={subtitle}
+      open={item !== null || day !== null}
+      title={showing_day && day ? formatDate(day.date) : title}
+      subtitle={
+        showing_day
+          ? `${day_count} exam${day_count === 1 ? "" : "s"} on this day`
+          : subtitle
+      }
       onClose={on_close}
+      onBack={item !== null && day !== null ? on_back : undefined}
+      panelKey={page_key}
       footer={
         item && (
           <div className="flex flex-wrap justify-end gap-2">
@@ -94,7 +119,9 @@ export function CalendarItemModal({
         )
       }
     >
-      {item?.kind === "exam" ? (
+      {showing_day && day ? (
+        <DayExamList exams={day.exams} on_select_exam={on_select_exam} />
+      ) : item?.kind === "exam" ? (
         <div className="space-y-4">
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div>

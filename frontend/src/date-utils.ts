@@ -53,12 +53,16 @@ export function formatMonthLabel(d: Date): string {
 
 export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-/** Six rows of seven cells covering the month of `cursor` (padded). */
+/**
+ * Week rows of seven cells covering the month of `cursor`. Only the weeks the
+ * month actually spans are returned, so no trailing row of next-month days.
+ */
 export function monthGrid(cursor: Date): Date[] {
   const first = startOfMonth(cursor);
   const start = addDays(first, -first.getDay());
+  const weeks = Math.ceil((first.getDay() + endOfMonth(cursor).getDate()) / 7);
   const cells: Date[] = [];
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < weeks * 7; i++) {
     cells.push(addDays(start, i));
   }
   return cells;

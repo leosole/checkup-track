@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Input } from "../ui/input";
+import { usePresence } from "../ui/use-presence";
 import type { NameComboboxProps } from "./types";
 
 /** Medication name input that suggests the medications already on file. */
 export function NameCombobox({ value, names, onChange }: NameComboboxProps) {
   const [open, set_open] = useState(false);
+  const { show, leaving } = usePresence(open, 120);
   const query = value.trim().toLowerCase();
   const matches = names
     .filter((name) => !query || name.toLowerCase().includes(query))
@@ -27,8 +29,13 @@ export function NameCombobox({ value, names, onChange }: NameComboboxProps) {
         onFocus={() => set_open(true)}
         onBlur={() => window.setTimeout(() => set_open(false), 120)}
       />
-      {open && (matches.length > 0 || is_new) && (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg bg-white py-1 shadow-untitled-lg ring-1 ring-gray-900/10 dark:bg-gray-900 dark:ring-white/10">
+      {show && (matches.length > 0 || is_new) && (
+        <ul
+          className={[
+            "absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg bg-white py-1 shadow-untitled-lg ring-1 ring-gray-900/10 motion-reduce:animate-none dark:bg-gray-900 dark:ring-white/10",
+            leaving ? "animate-dropdown-out" : "animate-dropdown-in",
+          ].join(" ")}
+        >
           {matches.map((name) => (
             <li key={name}>
               <button

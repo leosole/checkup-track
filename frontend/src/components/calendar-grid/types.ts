@@ -11,6 +11,52 @@ export interface CalendarGridProps {
   data: CalendarData;
   /** Show the selected exam, medication or symptom details. */
   onClick: (item: CalendarItemRef) => void;
+  /** Open the list of exams made on that day. */
+  on_day_click: (day: DayExams) => void;
+}
+
+/** Which way the calendar moved: the direction the outgoing month leaves in. */
+export type MonthDirection = "next" | "prev";
+
+/** A requested month change plus the snapshot of the month leaving the view. */
+export interface LeavingMonth {
+  cursor: Date;
+  direction: MonthDirection;
+}
+
+/** The exams of one day, shown by the day list modal. */
+export interface DayExams {
+  date: string;
+  exams: CalendarData["exams"];
+}
+
+export interface MonthBoardProps {
+  cursor: Date;
+  exams_by_day: Map<string, CalendarData["exams"]>;
+  medication_items: RangeItem[];
+  symptom_items: RangeItem[];
+  /** Show the selected medication or symptom details. */
+  on_click: (item: CalendarItemRef) => void;
+  /** Open the list of exams made on that day. */
+  on_day_click: (day: DayExams) => void;
+}
+
+export interface DayExamListProps {
+  exams: DayExams["exams"];
+  on_select_exam: (exam_id: number) => void;
+}
+
+export interface YearPickerProps {
+  year: number;
+  on_select: (year: number) => void;
+}
+
+export interface MonthPickerProps {
+  cursor: Date;
+  /** Snapshot of the month leaving the view while it animates out. */
+  leaving: LeavingMonth | null;
+  direction: MonthDirection;
+  on_select: (month: number) => void;
 }
 
 /** A drawable range: one medication window or one symptom occurrence. */

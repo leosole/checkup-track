@@ -83,6 +83,7 @@ function DashboardPage() {
               dash.showCalendarSymptom(item.id);
             }
           }}
+          on_day_click={dash.set_calendar_day}
         />
       </section>
       
