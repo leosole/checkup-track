@@ -27,4 +27,3 @@ backend/storage/
 # Misc
 .DS_Store
 *.log
-.neon

@@ -40,6 +40,7 @@ frontend/src/components/  dashboard/, calendar-grid, analytics-chart,
                           share-view (owner), guest-view (public read-only),
                           ui/ primitives
 scripts/preview.sh      starts uvicorn (8000) + vite (5173 by default) locally
+scripts/migrate_database.py  copies every table between two databases (Neon -> Aiven)
 ```
 
 ## Commands
@@ -82,9 +83,10 @@ network-heavy steps to CI.
 - **No migrations.** Tables are created by `SQLModel.metadata.create_all` in
   `init_db()`. Adding a column to an existing production table will not
   backfill — write a small migration or make it nullable/defaulted.
-- **Database**: `DATABASE_URL` selects Postgres (production); unset means
-  SQLite at `backend/health.db`. `postgres://` is normalized to
-  `postgresql://`. Keep both paths working; CI runs on SQLite.
+- **Database**: `DATABASE_URL` selects Postgres (production uses Aiven for
+  PostgreSQL; its service URI carries `?sslmode=require`); unset means SQLite at
+  `backend/health.db`. `postgres://` is normalized to `postgresql://`. Keep both
+  paths working; CI runs on SQLite. No Neon-specific tooling or files are used.
 - **Storage**: `object_storage.py` uses B2 only when all three of
   `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` are set, otherwise local
   `backend/storage/`. Both must keep working — dev has no B2 keys. Never assume
@@ -164,7 +166,7 @@ These rules apply to every file under `frontend/src/`:
 | `CREDENTIAL_ENCRYPTION_KEY` | encrypting user-owned provider keys at rest | saving keys fails closed; keep the value stable or saved keys become unreadable |
 | `GOOGLE_CLIENT_ID` | sign-in | `/api/auth/config` reports not configured, sign-in disabled |
 | `JWT_SECRET` | signing tokens | dev: auto-generated `backend/.jwt_secret`; prod: unstable tokens |
-| `DATABASE_URL` | Postgres in production | falls back to SQLite |
+| `DATABASE_URL` | Aiven Postgres in production | falls back to SQLite |
 | `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` | durable PDF storage | local disk (ephemeral in production) |
 | `SERVE_STATIC` | set `1` on Render so FastAPI also serves `frontend/dist` at `/` | unset locally |
 

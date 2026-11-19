@@ -1,9 +1,10 @@
 """SQLModel engine initialization and session management.
 
-Production deployments set ``DATABASE_URL`` to a Postgres instance (Neon,
-Supabase, RDS, ...). When the variable is unset — local development, tests and
-CI — the app falls back to SQLite at ``backend/health.db`` so nothing extra is
-required to run it.
+Production deployments set ``DATABASE_URL`` to a hosted Postgres instance
+(Aiven — the production database — or any other Postgres such as Supabase or
+RDS). Aiven requires TLS, so its service URI carries ``?sslmode=require``.
+When the variable is unset — local development, tests and CI — the app falls
+back to SQLite at ``backend/health.db`` so nothing extra is required to run it.
 """
 
 import os
